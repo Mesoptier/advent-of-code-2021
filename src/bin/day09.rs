@@ -2,7 +2,6 @@ use std::collections::{HashSet, VecDeque};
 use std::fs::File;
 use std::io::Read;
 
-use nom::bytes::complete::tag;
 use nom::character::complete::{digit1, newline};
 use nom::combinator::map;
 use nom::IResult;
