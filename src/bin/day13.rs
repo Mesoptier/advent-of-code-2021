@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
+
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{digit1, newline};
@@ -85,7 +86,7 @@ fn parse_input(input: &str) -> IResult<&str, (Vec<(usize, usize)>, Vec<FoldInstr
 fn parse_points(input: &str) -> IResult<&str, Vec<(usize, usize)>> {
     separated_list1(
         newline,
-        separated_pair(parse_number, tag(","), parse_number)
+        separated_pair(parse_number, tag(","), parse_number),
     )(input)
 }
 
@@ -95,7 +96,7 @@ fn parse_folds(input: &str) -> IResult<&str, Vec<FoldInstruction>> {
         preceded(tag("fold along "), alt((
             map(preceded(tag("x="), parse_number), |x| FoldInstruction::Left(x)),
             map(preceded(tag("y="), parse_number), |y| FoldInstruction::Up(y)),
-        )))
+        ))),
     )(input)
 }
 
