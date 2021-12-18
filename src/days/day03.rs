@@ -1,18 +1,19 @@
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+#[aoc_generator(day3)]
+pub fn input_generator(input: &str) -> Vec<String> {
+    input
+        .lines()
+        .map(|s| s.to_string())
+        .collect()
+}
 
-fn main() {
-    let file = File::open("input/day03.txt").unwrap();
-    let buf_reader = BufReader::new(file);
-    let lines = buf_reader.lines();
-
-    let numbers: Vec<String> = lines.map(|line| line.unwrap()).collect();
-    let number_size = numbers[0].len();
+#[aoc(day3, part1)]
+pub fn solve_part1(input: &[String]) -> u32 {
+    let number_size = input[0].len();
 
     let mut total_count = 0;
     let mut one_counts = vec![0; number_size];
 
-    for number_string in numbers.clone() {
+    for number_string in input {
         total_count += 1;
 
         for (i, c) in number_string.chars().enumerate() {
@@ -35,18 +36,20 @@ fn main() {
         }
     }
 
-    let gamma = usize::from_str_radix(gamma_str.as_str(), 2).unwrap();
-    let epsilon = usize::from_str_radix(epsilon_str.as_str(), 2).unwrap();
+    let gamma = u32::from_str_radix(gamma_str.as_str(), 2).unwrap();
+    let epsilon = u32::from_str_radix(epsilon_str.as_str(), 2).unwrap();
 
-    println!("Part 1: {}", gamma * epsilon);
-
-    let oxygen_generator_rating = search_part2_number(numbers.clone(), true);
-    let co2_scrubber_rating = search_part2_number(numbers.clone(), false);
-    println!("Part 2: {}", oxygen_generator_rating * co2_scrubber_rating);
-
+    gamma * epsilon
 }
 
-fn search_part2_number(mut numbers: Vec<String>, keep_most_common: bool) -> usize {
+#[aoc(day3, part2)]
+pub fn solve_part2(input: &[String]) -> u32 {
+    let oxygen_generator_rating = search_part2_number(Vec::from(input), true);
+    let co2_scrubber_rating = search_part2_number(Vec::from(input), false);
+    oxygen_generator_rating * co2_scrubber_rating
+}
+
+fn search_part2_number(mut numbers: Vec<String>, keep_most_common: bool) -> u32 {
     let mut pos = 0;
     while numbers.len() != 1 {
         let filter_char = if most_common_bit_in_position(&numbers, pos) == keep_most_common {
@@ -65,7 +68,7 @@ fn search_part2_number(mut numbers: Vec<String>, keep_most_common: bool) -> usiz
         pos += 1;
     }
 
-    usize::from_str_radix(numbers[0].as_str(), 2).unwrap()
+    u32::from_str_radix(numbers[0].as_str(), 2).unwrap()
 }
 
 fn most_common_bit_in_position(numbers: &Vec<String>, pos: usize) -> bool {
