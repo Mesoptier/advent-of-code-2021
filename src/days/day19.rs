@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use hashbrown::{HashMap, HashSet};
 
 use itertools::Itertools;
 use nalgebra::{Matrix3, Vector3};
