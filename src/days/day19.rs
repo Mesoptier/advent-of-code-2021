@@ -1,6 +1,6 @@
 use std::str::FromStr;
-use hashbrown::{HashMap, HashSet};
 
+use hashbrown::{HashMap, HashSet};
 use itertools::Itertools;
 use nalgebra::{Matrix3, Vector3};
 use nom::bytes::complete::tag;
