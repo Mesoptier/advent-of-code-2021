@@ -94,6 +94,16 @@ fn fingerprint(p1: &Vector3<i32>, p2: &Vector3<i32>) -> Fingerprint {
     (norm_l1(&d), norm_lmax(&d))
 }
 
+fn extend_fingerprints_from_report(
+    fingerprints: &mut HashMap<Fingerprint, HashSet<[Vector3<i32>; 2]>>,
+    report: &Vec<Vector3<i32>>
+) {
+    for (p1, p2) in report.iter().tuple_combinations::<(_, _)>() {
+        let f = fingerprint(p1, p2);
+        fingerprints.entry(f).or_default().insert([*p1, *p2]);
+    }
+}
+
 #[aoc(day19, part1)]
 pub fn solve_part1(input: &Vec<Vec<Vector3<i32>>>) -> usize {
     solve_both(input).0
@@ -105,17 +115,17 @@ pub fn solve_part2(input: &Vec<Vec<Vector3<i32>>>) -> i32 {
 }
 
 fn solve_both(input: &Vec<Vec<Vector3<i32>>>) -> (usize, i32) {
+    let (first_report, remaining_reports) = input.split_first().unwrap();
+    let mut remaining_reports = remaining_reports.to_vec();
+
     let mut known_beacons = HashSet::<Vector3<i32>>::new();
-    known_beacons.extend(input[0].iter());
+    known_beacons.extend(first_report.iter());
 
     // NOTE: This does not contain fingerprints for all point-pairs (across report boundaries), only
     // for point-pairs within reports.
     // TODO: Might contain duplicate pairs with swapped points?
     let mut known_fingerprints = HashMap::<Fingerprint, HashSet<[Vector3<i32>; 2]>>::new();
-    for (p1, p2) in input[0].iter().tuple_combinations::<(_, _)>() {
-        let f = fingerprint(p1, p2);
-        known_fingerprints.entry(f).or_default().insert([*p1, *p2]);
-    }
+    extend_fingerprints_from_report(&mut known_fingerprints, first_report);
 
     let mut scanners = vec![[0, 0, 0].into()];
 
@@ -127,17 +137,10 @@ fn solve_both(input: &Vec<Vec<Vector3<i32>>>) -> (usize, i32) {
     //      use the two maps of fingerprints to point pairs as candidate alignments for brute-force match checking
     //      IDEA: a pair of these point pairs could be used to reduce possible rotations to 2
 
-    let mut remaining_reports = Vec::from_iter(input[1..].iter());
-
     while !remaining_reports.is_empty() {
-        for (index, &report) in remaining_reports.iter().enumerate() {
+        for (index, report) in remaining_reports.iter().enumerate() {
             if let Some((scanner, transformed_report)) = find_match(&known_beacons, &known_fingerprints, report) {
-                // Extend known_fingerprints with transformed points
-                for (p1, p2) in transformed_report.iter().tuple_combinations::<(_, _)>() {
-                    let f = fingerprint(p1, p2);
-                    known_fingerprints.entry(f).or_default().insert([*p1, *p2]);
-                }
-
+                extend_fingerprints_from_report(&mut known_fingerprints, &transformed_report);
                 scanners.push(scanner);
                 known_beacons.extend(transformed_report.into_iter());
                 remaining_reports.swap_remove(index);
