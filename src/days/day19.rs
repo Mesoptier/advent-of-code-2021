@@ -95,12 +95,12 @@ fn fingerprint(p1: &Vector3<i32>, p2: &Vector3<i32>) -> Fingerprint {
 }
 
 fn extend_fingerprints_from_report(
-    fingerprints: &mut HashMap<Fingerprint, HashSet<[Vector3<i32>; 2]>>,
+    fingerprints: &mut HashMap<Fingerprint, Vec<[Vector3<i32>; 2]>>,
     report: &Vec<Vector3<i32>>,
 ) {
     for (p1, p2) in report.iter().tuple_combinations::<(_, _)>() {
         let f = fingerprint(p1, p2);
-        fingerprints.entry(f).or_default().insert([*p1, *p2]);
+        fingerprints.entry(f).or_default().push([*p1, *p2]);
     }
 }
 
@@ -170,7 +170,7 @@ fn solve_both(input: &Vec<Vec<Vector3<i32>>>) -> (usize, i32) {
 
 fn find_match(
     known_beacons: &HashSet<Vector3<i32>>,
-    known_fingerprints: &HashMap<Fingerprint, HashSet<[Vector3<i32>; 2]>>,
+    known_fingerprints: &HashMap<Fingerprint, Vec<[Vector3<i32>; 2]>>,
     report: &Vec<Vector3<i32>>,
     report_fingerprints: &Vec<(Fingerprint, [&Vector3<i32>; 2])>,
 ) -> Option<(Vector3<i32>, Vec<Vector3<i32>>)> {
