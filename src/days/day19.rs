@@ -181,40 +181,42 @@ fn find_match(
         })
         .collect::<Vec<_>>();
 
-    // TODO: Check that 12+ fingerprints support the same rotation
-    if matching_fingerprints.len() < 12 {
+    // At least (12 choose 2) fingerprints should match
+    if matching_fingerprints.len() < 66 {
         return None;
     }
 
     for (f, report_pair) in matching_fingerprints {
         for known_pair in known_fingerprints.get(&f).unwrap() {
+            // ASSUMPTION: Order of beacons in input is invariant between reports. So if beacon A
+            // appears before beacon B in report 1, so should it in other reports. Without this
+            // assumption we'd need to iterator through the cartesian product of report_pair with
+            // known_pair for our pinned points.
+            let [kp1, kp2] = known_pair;
+            let [rp1, rp2] = *report_pair;
+
             let supported_rotations = ROTATION_MATRICES.iter()
                 .filter(|&m| {
-                    known_pair[0] - m * report_pair[0] == known_pair[1] - m * report_pair[1]
-                        || known_pair[0] - m * report_pair[1] == known_pair[1] - m * report_pair[0]
+                    kp1 - m * rp1 == kp2 - m * rp2
                 })
                 .collect::<Vec<_>>();
 
-            for (&report_pinned, known_pinned) in report_pair.iter().cartesian_product(known_pair) {
-                for &m in &supported_rotations {
-                    let report_pinned = m * report_pinned;
+            for &m in &supported_rotations {
+                let translation = kp1 - m * rp1;
 
-                    let translation = known_pinned - report_pinned;
+                let transformed_report = report
+                    .iter()
+                    .map(|p| m * p + translation)
+                    .collect::<Vec<_>>();
 
-                    let transformed_report = report
-                        .iter()
-                        .map(|p| m * p + translation)
-                        .collect::<Vec<_>>();
+                let mut num_matches = 0;
+                for transformed_beacon in &transformed_report {
+                    if known_beacons.contains(transformed_beacon) {
+                        num_matches += 1;
+                    }
 
-                    let mut num_matches = 0;
-                    for transformed_beacon in &transformed_report {
-                        if known_beacons.contains(transformed_beacon) {
-                            num_matches += 1;
-                        }
-
-                        if num_matches >= 12 {
-                            return Some((translation, transformed_report));
-                        }
+                    if num_matches >= 12 {
+                        return Some((translation, transformed_report));
                     }
                 }
             }
