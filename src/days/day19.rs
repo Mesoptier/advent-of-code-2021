@@ -196,12 +196,13 @@ fn find_match(
             let [rp1, rp2] = *report_pair;
 
             let supported_rotations = ROTATION_MATRICES.iter()
+                // This always returns 0 or 1 items, so it could be replaced with a find().
+                // But it's not really performance critical, so I'll leave it as is.
                 .filter(|&m| {
                     kp1 - m * rp1 == kp2 - m * rp2
-                })
-                .collect::<Vec<_>>();
+                });
 
-            for &m in &supported_rotations {
+            for m in supported_rotations {
                 let translation = kp1 - m * rp1;
 
                 let transformed_report = report
@@ -215,7 +216,8 @@ fn find_match(
                         num_matches += 1;
                     }
 
-                    if num_matches >= 12 {
+                    // ASSUMPTION: Only 3 matches are needed to determine overlap.
+                    if num_matches >= 3 {
                         return Some((translation, transformed_report));
                     }
                 }
