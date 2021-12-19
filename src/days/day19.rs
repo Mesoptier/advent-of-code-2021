@@ -96,7 +96,7 @@ fn fingerprint(p1: &Vector3<i32>, p2: &Vector3<i32>) -> Fingerprint {
 
 fn extend_fingerprints_from_report(
     fingerprints: &mut HashMap<Fingerprint, HashSet<[Vector3<i32>; 2]>>,
-    report: &Vec<Vector3<i32>>
+    report: &Vec<Vector3<i32>>,
 ) {
     for (p1, p2) in report.iter().tuple_combinations::<(_, _)>() {
         let f = fingerprint(p1, p2);
@@ -116,34 +116,39 @@ pub fn solve_part2(input: &Vec<Vec<Vector3<i32>>>) -> i32 {
 
 fn solve_both(input: &Vec<Vec<Vector3<i32>>>) -> (usize, i32) {
     let (first_report, remaining_reports) = input.split_first().unwrap();
-    let mut remaining_reports = remaining_reports.to_vec();
 
     let mut known_beacons = HashSet::<Vector3<i32>>::new();
     known_beacons.extend(first_report.iter());
 
     // NOTE: This does not contain fingerprints for all point-pairs (across report boundaries), only
     // for point-pairs within reports.
-    // TODO: Might contain duplicate pairs with swapped points?
-    let mut known_fingerprints = HashMap::<Fingerprint, HashSet<[Vector3<i32>; 2]>>::new();
+    let mut known_fingerprints = HashMap::new();
     extend_fingerprints_from_report(&mut known_fingerprints, first_report);
+
+    // Pre-compute fingerprints for each remaining report
+    let mut reports_with_fingerprints = remaining_reports.iter()
+        .map(|report| {
+            let fingerprints = report.iter()
+                .tuple_combinations::<(_, _)>()
+                .map(|(p1, p2)| {
+                    (fingerprint(p1, p2), [p1, p2])
+                })
+                .collect::<Vec<_>>();
+            (report, fingerprints)
+        })
+        .collect::<Vec<_>>();
 
     let mut scanners = vec![[0, 0, 0].into()];
 
-    // consider fingerprints of point pairs
-    // known_fingerprints: map from fingerprint to list of point pairs with that fingerprint
-    // find_match(report):
-    //      compute map of fingerprints to lists of point pairs in the report
-    //      if fewer than 12 of these fingerprints are in known_fingerprints -> skip report
-    //      use the two maps of fingerprints to point pairs as candidate alignments for brute-force match checking
-    //      IDEA: a pair of these point pairs could be used to reduce possible rotations to 2
-
-    while !remaining_reports.is_empty() {
-        for (index, report) in remaining_reports.iter().enumerate() {
-            if let Some((scanner, transformed_report)) = find_match(&known_beacons, &known_fingerprints, report) {
+    while !reports_with_fingerprints.is_empty() {
+        for (index, (report, fingerprints)) in reports_with_fingerprints.iter().enumerate() {
+            if let Some((scanner, transformed_report)) = {
+                find_match(&known_beacons, &known_fingerprints, report, fingerprints)
+            } {
                 extend_fingerprints_from_report(&mut known_fingerprints, &transformed_report);
                 scanners.push(scanner);
                 known_beacons.extend(transformed_report.into_iter());
-                remaining_reports.swap_remove(index);
+                reports_with_fingerprints.swap_remove(index);
                 break;
             }
         }
@@ -164,17 +169,13 @@ fn solve_both(input: &Vec<Vec<Vector3<i32>>>) -> (usize, i32) {
 }
 
 fn find_match(
-    beacons: &HashSet<Vector3<i32>>,
+    known_beacons: &HashSet<Vector3<i32>>,
     known_fingerprints: &HashMap<Fingerprint, HashSet<[Vector3<i32>; 2]>>,
     report: &Vec<Vector3<i32>>,
+    report_fingerprints: &Vec<(Fingerprint, [&Vector3<i32>; 2])>,
 ) -> Option<(Vector3<i32>, Vec<Vector3<i32>>)> {
-    // TODO: Compute report fingerprints in advance, instead of repeating this every iteration
-    let matching_fingerprints = report
+    let matching_fingerprints = report_fingerprints
         .iter()
-        .tuple_combinations::<(_, _)>()
-        .map(|(p1, p2)| {
-            (fingerprint(p1, p2), [*p1, *p2])
-        })
         .filter(|(f, _)| {
             known_fingerprints.contains_key(f)
         })
@@ -194,7 +195,7 @@ fn find_match(
                 })
                 .collect::<Vec<_>>();
 
-            for (report_pinned, known_pinned) in report_pair.iter().cartesian_product(known_pair) {
+            for (&report_pinned, known_pinned) in report_pair.iter().cartesian_product(known_pair) {
                 for &m in &supported_rotations {
                     let report_pinned = m * report_pinned;
 
@@ -207,7 +208,7 @@ fn find_match(
 
                     let mut num_matches = 0;
                     for transformed_beacon in &transformed_report {
-                        if beacons.contains(transformed_beacon) {
+                        if known_beacons.contains(transformed_beacon) {
                             num_matches += 1;
                         }
 
