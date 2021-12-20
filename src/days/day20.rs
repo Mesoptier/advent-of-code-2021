@@ -39,6 +39,100 @@ macro_rules! g {
     ( $w:expr, $x:expr, $y:expr ) => { $x + $w * $y };
 }
 
+fn process(
+    y_range: Vec<usize>,
+    w: usize,
+    h: usize,
+    grid: Arc<Vec<bool>>,
+    edge: bool,
+    alg: Arc<Vec<bool>>,
+) -> Vec<bool> {
+    let mut result = Vec::with_capacity(w * y_range.len());
+
+    let mut i_min = 0;
+    let mut i_max = y_range.len() - 1;
+
+    // Special case for the first row of the grid
+    if *y_range.first().unwrap() == 0 {
+        i_min += 1;
+        let it = iter::empty()
+            .chain(iter::once(u_bits![
+                edge, edge, edge,
+                edge, grid[g!(w, 0, 0)], grid[g!(w, 1, 0)],
+                edge, grid[g!(w, 0, 1)], grid[g!(w, 1, 1)]
+            ]))
+            .chain((1..(w - 1)).map({
+                |x| u_bits![
+                    edge, edge, edge,
+                    grid[g!(w, x - 1, 0)], grid[g!(w, x, 0)], grid[g!(w, x + 1, 0)],
+                    grid[g!(w, x - 1, 1)], grid[g!(w, x, 1)], grid[g!(w, x + 1, 1)]
+                ]
+            }))
+            .chain(iter::once(u_bits![
+                edge, edge, edge,
+                grid[g!(w, w - 2, 0)], grid[g!(w, w - 1, 0)], edge,
+                grid[g!(w, w - 2, 1)], grid[g!(w, w - 1, 1)], edge
+            ]))
+            .map(|alg_idx| alg[alg_idx]);
+        result.extend(it);
+    }
+
+    // Skip last row of the grid, so we can handle special case after
+    if *y_range.last().unwrap() == h - 1 {
+        i_max -= 1;
+    }
+
+    // Middle rows (hot path)
+    for y in y_range[i_min]..=y_range[i_max] {
+        let it = iter::empty()
+            .chain(iter::once(u_bits![
+                edge, grid[g!(w, 0, y - 1)], grid[g!(w, 1, y - 1)],
+                edge, grid[g!(w, 0, y)], grid[g!(w, 1, y)],
+                edge, grid[g!(w, 0, y + 1)], grid[g!(w, 1, y + 1)]
+            ]))
+            .chain((1..(w - 1)).map({
+                |x| u_bits![
+                    grid[g!(w, x - 1, y - 1)], grid[g!(w, x, y - 1)], grid[g!(w, x + 1, y - 1)],
+                    grid[g!(w, x - 1, y)], grid[g!(w, x, y)], grid[g!(w, x + 1, y)],
+                    grid[g!(w, x - 1, y + 1)], grid[g!(w, x, y + 1)], grid[g!(w, x + 1, y + 1)]
+                ]
+            }))
+            .chain(iter::once(u_bits![
+                grid[g!(w, w - 2, y - 1)], grid[g!(w, w - 1, y - 1)], edge,
+                grid[g!(w, w - 2, y)], grid[g!(w, w - 1, y)], edge,
+                grid[g!(w, w - 2, y + 1)], grid[g!(w, w - 1, y + 1)], edge
+            ]))
+            .map(|alg_idx| alg[alg_idx]);
+        result.extend(it);
+    }
+
+    // Special case for the last row of the grid
+    if *y_range.last().unwrap() == h - 1 {
+        let it = iter::empty()
+            .chain(iter::once(u_bits![
+                edge, grid[g!(w, 0, h - 2)], grid[g!(w, 1, h - 2)],
+                edge, grid[g!(w, 0, h - 1)], grid[g!(w, 1, h - 1)],
+                edge, edge, edge
+            ]))
+            .chain((1..(w - 1)).map({
+                |x| u_bits![
+                    grid[g!(w, x - 1, h - 2)], grid[g!(w, x, h - 2)], grid[g!(w, x + 1, h - 2)],
+                    grid[g!(w, x - 1, h - 1)], grid[g!(w, x, h - 1)], grid[g!(w, x + 1, h - 1)],
+                    edge, edge, edge
+                ]
+            }))
+            .chain(iter::once(u_bits![
+                grid[g!(w, w - 2, h - 2)], grid[g!(w, w - 1, h - 2)], edge,
+                grid[g!(w, w - 2, h - 1)], grid[g!(w, w - 1, h - 1)], edge,
+                edge, edge, edge
+            ]))
+            .map(|alg_idx| alg[alg_idx]);
+        result.extend(it);
+    }
+
+    result
+}
+
 fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
     let (alg, grid) = input;
 
@@ -68,90 +162,7 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
 
             let y_range = y_range.collect::<Vec<_>>();
             let handle = std::thread::spawn(move || {
-                let mut result = Vec::with_capacity(w * y_range.len());
-
-                let mut i_min = 0;
-                let mut i_max = y_range.len() - 1;
-
-                // Special case for the first row of the grid
-                if *y_range.first().unwrap() == 0 {
-                    i_min += 1;
-                    let it = iter::empty()
-                        .chain(iter::once(u_bits![
-                            edge, edge, edge,
-                            edge, grid[g!(w, 0, 0)], grid[g!(w, 1, 0)],
-                            edge, grid[g!(w, 0, 1)], grid[g!(w, 1, 1)]
-                        ]))
-                        .chain((1..(w - 1)).map({
-                            |x| u_bits![
-                                edge, edge, edge,
-                                grid[g!(w, x - 1, 0)], grid[g!(w, x, 0)], grid[g!(w, x + 1, 0)],
-                                grid[g!(w, x - 1, 1)], grid[g!(w, x, 1)], grid[g!(w, x + 1, 1)]
-                            ]
-                        }))
-                        .chain(iter::once(u_bits![
-                            edge, edge, edge,
-                            grid[g!(w, w - 2, 0)], grid[g!(w, w - 1, 0)], edge,
-                            grid[g!(w, w - 2, 1)], grid[g!(w, w - 1, 1)], edge
-                        ]))
-                        .map(|alg_idx| alg[alg_idx]);
-                    result.extend(it);
-                }
-
-                // Skip last row of the grid, so we can handle special case after
-                if *y_range.last().unwrap() == h - 1 {
-                    i_max -= 1;
-                }
-
-                // Middle rows (hot path)
-                for y in y_range[i_min]..=y_range[i_max] {
-                    let it = iter::empty()
-                        .chain(iter::once(u_bits![
-                            edge, grid[g!(w, 0, y - 1)], grid[g!(w, 1, y - 1)],
-                            edge, grid[g!(w, 0, y)], grid[g!(w, 1, y)],
-                            edge, grid[g!(w, 0, y + 1)], grid[g!(w, 1, y + 1)]
-                        ]))
-                        .chain((1..(w - 1)).map({
-                            |x| u_bits![
-                                grid[g!(w, x - 1, y - 1)], grid[g!(w, x, y - 1)], grid[g!(w, x + 1, y - 1)],
-                                grid[g!(w, x - 1, y)], grid[g!(w, x, y)], grid[g!(w, x + 1, y)],
-                                grid[g!(w, x - 1, y + 1)], grid[g!(w, x, y + 1)], grid[g!(w, x + 1, y + 1)]
-                            ]
-                        }))
-                        .chain(iter::once(u_bits![
-                            grid[g!(w, w - 2, y - 1)], grid[g!(w, w - 1, y - 1)], edge,
-                            grid[g!(w, w - 2, y)], grid[g!(w, w - 1, y)], edge,
-                            grid[g!(w, w - 2, y + 1)], grid[g!(w, w - 1, y + 1)], edge
-                        ]))
-                        .map(|alg_idx| alg[alg_idx]);
-                    result.extend(it);
-                }
-
-                // Special case for the last row of the grid
-                if *y_range.last().unwrap() == h - 1 {
-                    let it = iter::empty()
-                        .chain(iter::once(u_bits![
-                            edge, grid[g!(w, 0, h - 2)], grid[g!(w, 1, h - 2)],
-                            edge, grid[g!(w, 0, h - 1)], grid[g!(w, 1, h - 1)],
-                            edge, edge, edge
-                        ]))
-                        .chain((1..(w - 1)).map({
-                            |x| u_bits![
-                                grid[g!(w, x - 1, h - 2)], grid[g!(w, x, h - 2)], grid[g!(w, x + 1, h - 2)],
-                                grid[g!(w, x - 1, h - 1)], grid[g!(w, x, h - 1)], grid[g!(w, x + 1, h - 1)],
-                                edge, edge, edge
-                            ]
-                        }))
-                        .chain(iter::once(u_bits![
-                            grid[g!(w, w - 2, h - 2)], grid[g!(w, w - 1, h - 2)], edge,
-                            grid[g!(w, w - 2, h - 1)], grid[g!(w, w - 1, h - 1)], edge,
-                            edge, edge, edge
-                        ]))
-                        .map(|alg_idx| alg[alg_idx]);
-                    result.extend(it);
-                }
-
-                result
+                process(y_range, w, h, grid, edge, alg)
             });
             handles.push(handle);
         }
