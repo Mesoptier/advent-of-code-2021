@@ -156,8 +156,8 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize, num_threads: usize) 
     for y_range in &(0..h).chunks((h / num_threads).max(1)) {
         let alg = alg.clone();
 
-        let (tx1, rx1) = mpsc::channel();
-        let (tx2, rx2) = mpsc::channel();
+        let (tx1, rx1) = mpsc::channel::<(Arc<Vec<bool>>, bool)>();
+        let (tx2, rx2) = mpsc::channel::<Vec<bool>>();
 
         let y_range = y_range.collect::<Vec<_>>();
         std::thread::spawn(move || {
@@ -174,8 +174,7 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize, num_threads: usize) 
             tx.send((grid.clone(), edge)).unwrap();
         }
 
-        // TODO: Just overwrite the previous grid?
-        let mut next_grid = vec![];
+        let mut next_grid = Vec::with_capacity(grid.len());
         for (_, rx) in &channels {
             next_grid.extend_from_slice(rx.recv().unwrap().as_slice());
         }
