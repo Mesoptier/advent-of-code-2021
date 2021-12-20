@@ -1,4 +1,7 @@
 use std::iter;
+use std::sync::Arc;
+
+use itertools::Itertools;
 
 #[aoc_generator(day20)]
 pub fn input_generator(input: &str) -> (Vec<bool>, Vec<Vec<bool>>) {
@@ -32,184 +35,133 @@ macro_rules! u_bits {
     };
 }
 
-fn windows(w: usize, h: usize, grid: &Vec<bool>, edge: bool) -> impl Iterator<Item=usize> + '_ {
-    let g = move |x: usize, y: usize| { grid[x + w * y] };
-
-    let first_extend_row = iter::empty()
-        .chain(iter::once(u_bits![
-            edge, edge, edge,
-            edge, edge, edge,
-            edge, edge, g(0, 0)
-        ]))
-        .chain(iter::once(u_bits![
-            edge, edge, edge,
-            edge, edge, edge,
-            edge, g(0, 0), g(1, 0)
-        ]))
-        .chain((1..(w - 1)).map(move |x| u_bits![
-            edge, edge, edge,
-            edge, edge, edge,
-            g(x - 1, 0), g(x, 0), g(x + 1, 0)
-        ]))
-        .chain(iter::once(u_bits![
-            edge, edge, edge,
-            edge, edge, edge,
-            g(w - 2, 0), g(w - 1, 0), edge
-        ]))
-        .chain(iter::once(u_bits![
-            edge, edge, edge,
-            edge, edge, edge,
-            g(w - 1, 0), edge, edge
-        ]));
-
-    let first_real_row = iter::empty()
-        .chain(iter::once(u_bits![
-            edge, edge, edge,
-            edge, edge, g(0, 0),
-            edge, edge, g(0, 1)
-        ]))
-        .chain(iter::once(u_bits![
-            edge, edge, edge,
-            edge, g(0, 0), g(1, 0),
-            edge, g(0, 1), g(1, 1)
-        ]))
-        .chain((1..(w - 1)).map(move |x| u_bits![
-            edge, edge, edge,
-            g(x - 1, 0), g(x, 0), g(x + 1, 0),
-            g(x - 1, 1), g(x, 1), g(x + 1, 1)
-        ]))
-        .chain(iter::once(u_bits![
-            edge, edge, edge,
-            g(w - 2, 0), g(w - 1, 0), edge,
-            g(w - 2, 1), g(w - 1, 1), edge
-        ]))
-        .chain(iter::once(u_bits![
-            edge, edge, edge,
-            g(w - 1, 0), edge, edge,
-            g(w - 1, 1), edge, edge
-        ]));
-
-    let middle_rows = (1..(h - 1)).flat_map(move |y| {
-        iter::empty()
-            .chain(
-            iter::once(u_bits![
-                edge, edge, g(0, y - 1),
-                edge, edge, g(0, y),
-                edge, edge, g(0, y + 1)
-            ]))
-            .chain(
-            iter::once(u_bits![
-                edge, g(0, y - 1), g(1, y - 1),
-                edge, g(0, y), g(1, y),
-                edge, g(0, y + 1), g(1, y + 1)
-            ]))
-            .chain((1..(w - 1)).map(move |x| u_bits![
-                g(x - 1, y - 1), g(x, y - 1), g(x + 1, y - 1),
-                g(x - 1, y), g(x, y), g(x + 1, y),
-                g(x - 1, y + 1), g(x, y + 1), g(x + 1, y + 1)
-            ]))
-            .chain(iter::once(u_bits![
-                g(w - 2, y - 1), g(w - 1, y - 1), edge,
-                g(w - 2, y), g(w - 1, y), edge,
-                g(w - 2, y + 1), g(w - 1, y + 1), edge
-            ]))
-            .chain(iter::once(u_bits![
-                g(w - 1, y - 1), edge, edge,
-                g(w - 1, y), edge, edge,
-                g(w - 1, y + 1), edge, edge
-            ]))
-    });
-
-    let last_real_row = iter::empty()
-        .chain(iter::once(u_bits![
-            edge, edge, g(0, h - 2),
-            edge, edge, g(0, h - 1),
-            edge, edge, edge
-        ]))
-        .chain(iter::once(u_bits![
-            edge, g(0, h - 2), g(1, h - 2),
-            edge, g(0, h - 1), g(1, h - 1),
-            edge, edge, edge
-        ]))
-        .chain((1..(w - 1)).map(move |x| u_bits![
-            g(x - 1, h - 2), g(x, h - 2), g(x + 1, h - 2),
-            g(x - 1, h - 1), g(x, h - 1), g(x + 1, h - 1),
-            edge, edge, edge
-        ]))
-        .chain(iter::once(u_bits![
-            g(w - 2, h - 2), g(w - 1, h - 2), edge,
-            g(w - 2, h - 1), g(w - 1, h - 1), edge,
-            edge, edge, edge
-        ]))
-        .chain(iter::once(u_bits![
-            g(w - 1, h - 2), edge, edge,
-            g(w - 1, h - 1), edge, edge,
-            edge, edge, edge
-        ]));
-
-    let last_extend_row = iter::empty()
-        .chain(iter::once(u_bits![
-            edge, edge, g(0, h - 1),
-            edge, edge, edge,
-            edge, edge, edge
-        ]))
-        .chain(iter::once(u_bits![
-            edge, g(0, h - 1), g(1, h - 1),
-            edge, edge, edge,
-            edge, edge, edge
-        ]))
-        .chain((1..(w - 1)).map(move |x| u_bits![
-            g(x - 1, h - 1), g(x, h - 1), g(x + 1, h - 1),
-            edge, edge, edge,
-            edge, edge, edge
-        ]))
-        .chain(iter::once(u_bits![
-            g(w - 2, h - 1), g(w - 1, h - 1), edge,
-            edge, edge, edge,
-            edge, edge, edge
-        ]))
-        .chain(iter::once(u_bits![
-            g(w - 1, h - 1), edge, edge,
-            edge, edge, edge,
-            edge, edge, edge
-        ]));
-
-    iter::empty()
-        .chain(first_extend_row)
-        .chain(first_real_row)
-        .chain(middle_rows)
-        .chain(last_real_row)
-        .chain(last_extend_row)
+macro_rules! g {
+    ( $w:expr, $x:expr, $y:expr ) => { $x + $w * $y };
 }
 
 fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
     let (alg, grid) = input;
 
-    let mut w = grid[0].len();
-    let mut h = grid.len();
-    let mut pixels = Vec::from_iter(
-        grid.iter()
-            .enumerate()
-            .flat_map(|(_y, row)| {
-                row.iter()
-                    .enumerate()
-                    .map(|(_x, lit)| {
-                        *lit
-                    })
-            })
-    );
+    // Construct the grid, with padding
+    let w = grid[0].len() + steps * 2;
+    let h = grid.len() + steps * 2;
+    let mut grid = Arc::new({
+        let mut padded_grid = vec![false; w * h];
+        for (y, row) in grid.iter().enumerate() {
+            for (x, lit) in row.iter().enumerate() {
+                padded_grid[(x + steps) + w * (y + steps)] = *lit;
+            }
+        }
+        padded_grid
+    });
+    let alg = Arc::new(alg.clone());
 
     let mut fill_pixel = false;
 
     for _step in 0..steps {
-        pixels = windows(w, h, &pixels, fill_pixel)
-            .map(|idx| {
-                alg[idx]
-            })
-            .collect();
+        // TODO: Spawn threads once, outside the loop, and use channels to synchronize steps
+        let mut handles = vec![];
+        let num_threads = 4;
+        for y_range in &(0..h).chunks((h / num_threads).max(1)) {
+            let grid = grid.clone();
+            let alg = alg.clone();
 
-        w += 2;
-        h += 2;
+            let y_range = y_range.collect::<Vec<_>>();
+            let edge = fill_pixel;
+            let handle = std::thread::spawn(move || {
+                let mut result = vec![];
+
+                let mut i_min = 0;
+                let mut i_max = y_range.len() - 1;
+
+                // Special case for the first row of the grid
+                if *y_range.first().unwrap() == 0 {
+                    i_min += 1;
+                    let it = iter::empty()
+                        .chain(iter::once(u_bits![
+                            edge, edge, edge,
+                            edge, grid[g!(w, 0, 0)], grid[g!(w, 1, 0)],
+                            edge, grid[g!(w, 0, 1)], grid[g!(w, 1, 1)]
+                        ]))
+                        .chain((1..(w - 1)).map({
+                            |x| u_bits![
+                                edge, edge, edge,
+                                grid[g!(w, x - 1, 0)], grid[g!(w, x, 0)], grid[g!(w, x + 1, 0)],
+                                grid[g!(w, x - 1, 1)], grid[g!(w, x, 1)], grid[g!(w, x + 1, 1)]
+                            ]
+                        }))
+                        .chain(iter::once(u_bits![
+                            edge, edge, edge,
+                            grid[g!(w, w - 2, 0)], grid[g!(w, w - 1, 0)], edge,
+                            grid[g!(w, w - 2, 1)], grid[g!(w, w - 1, 1)], edge
+                        ]))
+                        .map(|alg_idx| alg[alg_idx]);
+                    result.extend(it);
+                }
+
+                // Skip last row of the grid, so we can handle special case after
+                if *y_range.last().unwrap() == h - 1 {
+                    i_max -= 1;
+                }
+
+                // Middle rows (hot path)
+                for y in y_range[i_min]..=y_range[i_max] {
+                    let it = iter::empty()
+                        .chain(iter::once(u_bits![
+                            edge, grid[g!(w, 0, y - 1)], grid[g!(w, 1, y - 1)],
+                            edge, grid[g!(w, 0, y)], grid[g!(w, 1, y)],
+                            edge, grid[g!(w, 0, y + 1)], grid[g!(w, 1, y + 1)]
+                        ]))
+                        .chain((1..(w - 1)).map({
+                            |x| u_bits![
+                                grid[g!(w, x - 1, y - 1)], grid[g!(w, x, y - 1)], grid[g!(w, x + 1, y - 1)],
+                                grid[g!(w, x - 1, y)], grid[g!(w, x, y)], grid[g!(w, x + 1, y)],
+                                grid[g!(w, x - 1, y + 1)], grid[g!(w, x, y + 1)], grid[g!(w, x + 1, y + 1)]
+                            ]
+                        }))
+                        .chain(iter::once(u_bits![
+                            grid[g!(w, w - 2, y - 1)], grid[g!(w, w - 1, y - 1)], edge,
+                            grid[g!(w, w - 2, y)], grid[g!(w, w - 1, y)], edge,
+                            grid[g!(w, w - 2, y + 1)], grid[g!(w, w - 1, y + 1)], edge
+                        ]))
+                        .map(|alg_idx| alg[alg_idx]);
+                    result.extend(it);
+                }
+
+                // Special case for the last row of the grid
+                if *y_range.last().unwrap() == h - 1 {
+                    let it = iter::empty()
+                        .chain(iter::once(u_bits![
+                            edge, grid[g!(w, 0, h - 2)], grid[g!(w, 1, h - 2)],
+                            edge, grid[g!(w, 0, h - 1)], grid[g!(w, 1, h - 1)],
+                            edge, edge, edge
+                        ]))
+                        .chain((1..(w - 1)).map({
+                            |x| u_bits![
+                                grid[g!(w, x - 1, h - 2)], grid[g!(w, x, h - 2)], grid[g!(w, x + 1, h - 2)],
+                                grid[g!(w, x - 1, h - 1)], grid[g!(w, x, h - 1)], grid[g!(w, x + 1, h - 1)],
+                                edge, edge, edge
+                            ]
+                        }))
+                        .chain(iter::once(u_bits![
+                            grid[g!(w, w - 2, h - 2)], grid[g!(w, w - 1, h - 2)], edge,
+                            grid[g!(w, w - 2, h - 1)], grid[g!(w, w - 1, h - 1)], edge,
+                            edge, edge, edge
+                        ]))
+                        .map(|alg_idx| alg[alg_idx]);
+                    result.extend(it);
+                }
+
+                result
+            });
+            handles.push(handle);
+        }
+
+        let mut next_grid = vec![];
+        for handle in handles {
+            next_grid.extend_from_slice(handle.join().unwrap().as_slice());
+        }
+        grid = Arc::from(next_grid);
 
         fill_pixel = if fill_pixel {
             alg[511]
@@ -218,7 +170,7 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
         };
     }
 
-    pixels.iter().filter(|b| **b).count()
+    grid.iter().filter(|b| **b).count()
 }
 
 #[aoc(day20, part1)]
