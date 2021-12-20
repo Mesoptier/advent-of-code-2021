@@ -43,9 +43,9 @@ fn process(
     y_range: &Vec<usize>,
     w: usize,
     h: usize,
-    grid: Arc<Vec<bool>>,
+    grid: &Vec<bool>,
     edge: bool,
-    alg: &Arc<Vec<bool>>,
+    alg: &Vec<bool>,
 ) -> Vec<bool> {
     let mut result = Vec::with_capacity(w * y_range.len());
 
@@ -166,7 +166,7 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize, num_threads: usize) 
         let y_range = y_range.collect::<Vec<_>>();
         std::thread::spawn(move || {
             for (grid, edge) in rx1 {
-                tx2.send(process(&y_range, w, h, grid, edge, &alg)).unwrap();
+                tx2.send(process(&y_range, w, h, &grid, edge, &alg)).unwrap();
             }
         });
 
