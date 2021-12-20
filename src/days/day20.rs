@@ -1,4 +1,3 @@
-use std::iter;
 use std::sync::{Arc, mpsc};
 
 use itertools::Itertools;
@@ -118,7 +117,7 @@ fn process(
             edge, edge, edge
         ]));
 
-        for x in 1..(w-1) {
+        for x in 1..(w - 1) {
             result.push(alg_value!(u_bits![
                 grid[g!(w, x - 1, h - 2)], grid[g!(w, x, h - 2)], grid[g!(w, x + 1, h - 2)],
                 grid[g!(w, x - 1, h - 1)], grid[g!(w, x, h - 1)], grid[g!(w, x + 1, h - 1)],
