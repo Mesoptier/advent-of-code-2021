@@ -1,5 +1,5 @@
 use std::iter;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
 
 use itertools::Itertools;
 
@@ -40,12 +40,12 @@ macro_rules! g {
 }
 
 fn process(
-    y_range: Vec<usize>,
+    y_range: &Vec<usize>,
     w: usize,
     h: usize,
     grid: Arc<Vec<bool>>,
     edge: bool,
-    alg: Arc<Vec<bool>>,
+    alg: &Arc<Vec<bool>>,
 ) -> Vec<bool> {
     let mut result = Vec::with_capacity(w * y_range.len());
 
@@ -149,30 +149,39 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
         padded_grid
     });
     let alg = Arc::new(alg.clone());
-
     let mut edge = false;
 
+    let mut channels = vec![];
+
+    let num_threads = 12;
+    for y_range in &(0..h).chunks((h / num_threads).max(1)) {
+        let alg = alg.clone();
+
+        let (tx1, rx1) = mpsc::channel();
+        let (tx2, rx2) = mpsc::channel();
+
+        let y_range = y_range.collect::<Vec<_>>();
+        std::thread::spawn(move || {
+            for (grid, edge) in rx1 {
+                tx2.send(process(&y_range, w, h, grid, edge, &alg));
+            }
+        });
+
+        channels.push((tx1, rx2));
+    }
+
     for _step in 0..steps {
-        // TODO: Spawn threads once, outside the loop, and use channels to synchronize steps
-        let mut handles = vec![];
-        let num_threads = 4;
-        for y_range in &(0..h).chunks((h / num_threads).max(1)) {
-            let grid = grid.clone();
-            let alg = alg.clone();
-
-            let y_range = y_range.collect::<Vec<_>>();
-            let handle = std::thread::spawn(move || {
-                process(y_range, w, h, grid, edge, alg)
-            });
-            handles.push(handle);
+        for (tx, _) in &channels {
+            tx.send((grid.clone(), edge));
         }
 
+        // TODO: Just overwrite the previous grid?
         let mut next_grid = vec![];
-        for handle in handles {
-            next_grid.extend_from_slice(handle.join().unwrap().as_slice());
+        for (_, rx) in &channels {
+            next_grid.extend_from_slice(rx.recv().unwrap().as_slice());
         }
-        grid = Arc::from(next_grid);
 
+        grid = Arc::from(next_grid);
         edge = if edge {
             alg[511]
         } else {
