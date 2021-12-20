@@ -133,7 +133,7 @@ fn process(
     result
 }
 
-fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
+fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize, num_threads: usize) -> usize {
     let (alg, grid) = input;
 
     // Construct the grid, with padding
@@ -153,7 +153,6 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
 
     let mut channels = vec![];
 
-    let num_threads = 12;
     for y_range in &(0..h).chunks((h / num_threads).max(1)) {
         let alg = alg.clone();
 
@@ -163,7 +162,7 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
         let y_range = y_range.collect::<Vec<_>>();
         std::thread::spawn(move || {
             for (grid, edge) in rx1 {
-                tx2.send(process(&y_range, w, h, grid, edge, &alg));
+                tx2.send(process(&y_range, w, h, grid, edge, &alg)).unwrap();
             }
         });
 
@@ -172,7 +171,7 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
 
     for _step in 0..steps {
         for (tx, _) in &channels {
-            tx.send((grid.clone(), edge));
+            tx.send((grid.clone(), edge)).unwrap();
         }
 
         // TODO: Just overwrite the previous grid?
@@ -194,10 +193,10 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
 
 #[aoc(day20, part1)]
 pub fn solve_part1(input: &(Vec<bool>, Vec<Vec<bool>>)) -> usize {
-    solve(input, 2)
+    solve(input, 2, 1)
 }
 
 #[aoc(day20, part2)]
 pub fn solve_part2(input: &(Vec<bool>, Vec<Vec<bool>>)) -> usize {
-    solve(input, 50)
+    solve(input, 50, 12)
 }
