@@ -56,7 +56,7 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
     });
     let alg = Arc::new(alg.clone());
 
-    let mut fill_pixel = false;
+    let mut edge = false;
 
     for _step in 0..steps {
         // TODO: Spawn threads once, outside the loop, and use channels to synchronize steps
@@ -67,9 +67,8 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
             let alg = alg.clone();
 
             let y_range = y_range.collect::<Vec<_>>();
-            let edge = fill_pixel;
             let handle = std::thread::spawn(move || {
-                let mut result = vec![];
+                let mut result = Vec::with_capacity(w * y_range.len());
 
                 let mut i_min = 0;
                 let mut i_max = y_range.len() - 1;
@@ -163,7 +162,7 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
         }
         grid = Arc::from(next_grid);
 
-        fill_pixel = if fill_pixel {
+        edge = if edge {
             alg[511]
         } else {
             alg[0]
