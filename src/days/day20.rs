@@ -1,6 +1,6 @@
 use std::sync::{Arc, mpsc};
 
-use itertools::Itertools;
+use itertools::{Itertools, zip};
 
 #[aoc_generator(day20)]
 pub fn input_generator(input: &str) -> (Vec<bool>, Vec<Vec<bool>>) {
@@ -40,17 +40,16 @@ macro_rules! g {
 }
 
 fn process(
-    y_range: &Vec<usize>,
+    ys: &Vec<usize>,
     w: usize,
     h: usize,
     grid: &Vec<bool>,
     edge: bool,
     alg: &Vec<bool>,
 ) -> Vec<bool> {
-    let mut result = Vec::with_capacity(w * y_range.len());
+    let mut result = Vec::with_capacity(w * ys.len());
 
-    let mut i_min = 0;
-    let mut i_max = y_range.len() - 1;
+    let mut ys_range = 0..ys.len();
 
     /// Get the value "returned" by the "algorithm" for the given index
     macro_rules! alg_value {
@@ -58,14 +57,49 @@ fn process(
     }
 
     // Special case for the first row of the grid
-    if *y_range.first().unwrap() == 0 {
-        i_min += 1;
+    if *ys.first().unwrap() == 0 {
+        ys_range.start += 1;
+
+        // First row
+        result.push(alg_value!(u_bits![
+            edge, edge, edge,
+            edge, edge, edge,
+            edge, edge, grid[g!(w, 0, 0)]
+        ]));
+        result.push(alg_value!(u_bits![
+            edge, edge, edge,
+            edge, edge, edge,
+            edge, grid[g!(w, 0, 0)], grid[g!(w, 1, 0)]
+        ]));
+        for x in 1..(w - 1) {
+            result.push(alg_value!(u_bits![
+                edge, edge, edge,
+                edge, edge, edge,
+                grid[g!(w, x - 1, 0)], grid[g!(w, x, 0)], grid[g!(w, x + 1, 0)]
+            ]));
+        }
+        result.push(alg_value!(u_bits![
+            edge, edge, edge,
+            edge, edge, edge,
+            grid[g!(w, w - 2, 0)], grid[g!(w, w - 1, 0)], edge
+        ]));
+        result.push(alg_value!(u_bits![
+            edge, edge, edge,
+            edge, edge, edge,
+            grid[g!(w, w - 1, 0)], edge, edge
+        ]));
+
+        // Second row
+        result.push(alg_value!(u_bits![
+            edge, edge, edge,
+            edge, edge, grid[g!(w, 0, 0)],
+            edge, edge, grid[g!(w, 0, 1)]
+        ]));
         result.push(alg_value!(u_bits![
             edge, edge, edge,
             edge, grid[g!(w, 0, 0)], grid[g!(w, 1, 0)],
             edge, grid[g!(w, 0, 1)], grid[g!(w, 1, 1)]
         ]));
-
         for x in 1..(w - 1) {
             result.push(alg_value!(u_bits![
                 edge, edge, edge,
@@ -73,27 +107,35 @@ fn process(
                 grid[g!(w, x - 1, 1)], grid[g!(w, x, 1)], grid[g!(w, x + 1, 1)]
             ]));
         }
-
         result.push(alg_value!(u_bits![
             edge, edge, edge,
             grid[g!(w, w - 2, 0)], grid[g!(w, w - 1, 0)], edge,
             grid[g!(w, w - 2, 1)], grid[g!(w, w - 1, 1)], edge
         ]));
+        result.push(alg_value!(u_bits![
+            edge, edge, edge,
+            grid[g!(w, w - 1, 0)], edge, edge,
+            grid[g!(w, w - 1, 1)], edge, edge
+        ]));
     }
 
     // Skip last row of the grid, so we can handle special case after
-    if *y_range.last().unwrap() == h - 1 {
-        i_max -= 1;
+    if *ys.last().unwrap() == h - 1 {
+        ys_range.end -= 1;
     }
 
     // Middle rows (hot path)
-    for y in y_range[i_min]..=y_range[i_max] {
+    for y in ys_range.map(|i| ys[i]) {
+        result.push(alg_value!(u_bits![
+            edge, edge, grid[g!(w, 0, y - 1)],
+            edge, edge, grid[g!(w, 0, y)],
+            edge, edge, grid[g!(w, 0, y + 1)]
+        ]));
         result.push(alg_value!(u_bits![
             edge, grid[g!(w, 0, y - 1)], grid[g!(w, 1, y - 1)],
             edge, grid[g!(w, 0, y)], grid[g!(w, 1, y)],
             edge, grid[g!(w, 0, y + 1)], grid[g!(w, 1, y + 1)]
         ]));
-
         for x in 1..(w - 1) {
             result.push(alg_value!(u_bits![
                 grid[g!(w, x - 1, y - 1)], grid[g!(w, x, y - 1)], grid[g!(w, x + 1, y - 1)],
@@ -101,22 +143,31 @@ fn process(
                 grid[g!(w, x - 1, y + 1)], grid[g!(w, x, y + 1)], grid[g!(w, x + 1, y + 1)]
             ]));
         }
-
         result.push(alg_value!(u_bits![
             grid[g!(w, w - 2, y - 1)], grid[g!(w, w - 1, y - 1)], edge,
             grid[g!(w, w - 2, y)], grid[g!(w, w - 1, y)], edge,
             grid[g!(w, w - 2, y + 1)], grid[g!(w, w - 1, y + 1)], edge
         ]));
+        result.push(alg_value!(u_bits![
+            grid[g!(w, w - 1, y - 1)], edge, edge,
+            grid[g!(w, w - 1, y)], edge, edge,
+            grid[g!(w, w - 1, y + 1)], edge, edge
+        ]));
     }
 
     // Special case for the last row of the grid
-    if *y_range.last().unwrap() == h - 1 {
+    if *ys.last().unwrap() == h - 1 {
+        // Second-to-last row
+        result.push(alg_value!(u_bits![
+            edge, edge, grid[g!(w, 0, h - 2)],
+            edge, edge, grid[g!(w, 0, h - 1)],
+            edge, edge, edge
+        ]));
         result.push(alg_value!(u_bits![
             edge, grid[g!(w, 0, h - 2)], grid[g!(w, 1, h - 2)],
             edge, grid[g!(w, 0, h - 1)], grid[g!(w, 1, h - 1)],
             edge, edge, edge
         ]));
-
         for x in 1..(w - 1) {
             result.push(alg_value!(u_bits![
                 grid[g!(w, x - 1, h - 2)], grid[g!(w, x, h - 2)], grid[g!(w, x + 1, h - 2)],
@@ -124,10 +175,43 @@ fn process(
                 edge, edge, edge
             ]));
         }
-
         result.push(alg_value!(u_bits![
             grid[g!(w, w - 2, h - 2)], grid[g!(w, w - 1, h - 2)], edge,
             grid[g!(w, w - 2, h - 1)], grid[g!(w, w - 1, h - 1)], edge,
+            edge, edge, edge
+        ]));
+        result.push(alg_value!(u_bits![
+            grid[g!(w, w - 1, h - 2)], edge, edge,
+            grid[g!(w, w - 1, h - 1)], edge, edge,
+            edge, edge, edge
+        ]));
+
+        // Last row
+        result.push(alg_value!(u_bits![
+            edge, edge, grid[g!(w, 0, h - 1)],
+            edge, edge, edge,
+            edge, edge, edge
+        ]));
+        result.push(alg_value!(u_bits![
+            edge, grid[g!(w, 0, h - 1)], grid[g!(w, 1, h - 1)],
+            edge, edge, edge,
+            edge, edge, edge
+        ]));
+        for x in 1..(w - 1) {
+            result.push(alg_value!(u_bits![
+                grid[g!(w, x - 1, h - 1)], grid[g!(w, x, h - 1)], grid[g!(w, x + 1, h - 1)],
+                edge, edge, edge,
+                edge, edge, edge
+            ]));
+        }
+        result.push(alg_value!(u_bits![
+            grid[g!(w, w - 2, h - 1)], grid[g!(w, w - 1, h - 1)], edge,
+            edge, edge, edge,
+            edge, edge, edge
+        ]));
+        result.push(alg_value!(u_bits![
+            grid[g!(w, w - 1, h - 1)], edge, edge,
+            edge, edge, edge,
             edge, edge, edge
         ]));
     }
@@ -138,50 +222,66 @@ fn process(
 fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize, num_threads: usize) -> usize {
     let (alg, grid) = input;
 
-    // Construct the grid, with padding
-    let w = grid[0].len() + steps * 2;
-    let h = grid.len() + steps * 2;
+    let mut w = grid[0].len();
+    let mut h = grid.len();
+    let h_max = grid.len() + steps * 2; // eventual height
+
+    // Construct the grid
     let mut grid = Arc::new({
-        let mut padded_grid = vec![false; w * h];
-        for (y, row) in grid.iter().enumerate() {
-            for (x, lit) in row.iter().enumerate() {
-                padded_grid[(x + steps) + w * (y + steps)] = *lit;
-            }
-        }
-        padded_grid
+        Vec::from_iter(
+            grid.iter()
+                .enumerate()
+                .flat_map(|(_y, row)| {
+                    row.iter()
+                        .enumerate()
+                        .map(|(_x, lit)| *lit)
+                })
+        )
     });
     let alg = Arc::new(alg.clone());
 
-    // The state of all cells in the infinite grid outside our padded grid
+    // The state of all cells in the infinite grid outside our grid
     let mut edge = false;
 
     // Spawn threads, each thread processes a chunk of the rows in the grid
-    let mut channels = vec![];
-    for y_range in &(0..h).chunks((h / num_threads).max(1)) {
+    let mut thread_pool = vec![];
+    for _ in 0..num_threads {
         let alg = alg.clone();
 
-        let (tx1, rx1) = mpsc::channel::<(Arc<Vec<bool>>, bool)>();
+        type ProcessData = (Vec<usize>, Arc<Vec<bool>>, usize, usize, bool);
+
+        let (tx1, rx1) = mpsc::channel::<ProcessData>();
         let (tx2, rx2) = mpsc::channel::<Vec<bool>>();
 
-        let y_range = y_range.collect::<Vec<_>>();
         std::thread::spawn(move || {
-            for (grid, edge) in rx1 {
+            for (y_range, grid, w, h, edge) in rx1 {
                 tx2.send(process(&y_range, w, h, &grid, edge, &alg)).unwrap();
             }
         });
 
-        channels.push((tx1, rx2));
+        thread_pool.push((tx1, rx2));
     }
 
+    let chunk_size = (h_max / num_threads).max(1);
+
     for _step in 0..steps {
-        for (tx, _) in &channels {
-            tx.send((grid.clone(), edge)).unwrap();
+        // Send out chunks to be processed
+        let mut rxs = vec![];
+        for (ys_chunk, (tx, rx)) in zip(&(0..h).chunks(chunk_size), &thread_pool) {
+            let ys_chunk = ys_chunk.collect::<Vec<_>>();
+            tx.send((ys_chunk, grid.clone(), w, h, edge)).unwrap();
+            rxs.push(rx);
         }
 
+        // Receive and collect the processed chunks
         let mut next_grid = Vec::with_capacity(grid.len());
-        for (_, rx) in &channels {
+        for rx in rxs {
             next_grid.extend_from_slice(rx.recv().unwrap().as_slice());
         }
+
+        // Update width and height to account for the new cells added around the grid
+        w += 2;
+        h += 2;
 
         grid = Arc::from(next_grid);
         edge = if edge {
@@ -201,5 +301,5 @@ pub fn solve_part1(input: &(Vec<bool>, Vec<Vec<bool>>)) -> usize {
 
 #[aoc(day20, part2)]
 pub fn solve_part2(input: &(Vec<bool>, Vec<Vec<bool>>)) -> usize {
-    solve(input, 50, 10)
+    solve(input, 50, 8)
 }
