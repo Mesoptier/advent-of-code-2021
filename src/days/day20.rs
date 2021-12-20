@@ -1,5 +1,4 @@
 use bitvec::prelude::*;
-use hashbrown::HashSet;
 
 #[aoc_generator(day20)]
 pub fn input_generator(input: &str) -> (Vec<bool>, Vec<Vec<bool>>) {
@@ -20,56 +19,39 @@ pub fn input_generator(input: &str) -> (Vec<bool>, Vec<Vec<bool>>) {
     (alg, grid)
 }
 
-fn print_grid(pixels: &HashSet<(i32, i32)>, min_x: i32, max_x: i32, min_y: i32, max_y: i32) {
-    for y in min_y..=max_y {
-        for x in min_x..=max_x {
-            print!("{}", match pixels.contains(&(x, y)) {
-                true => '#',
-                false => '.',
-            });
-        }
-        println!();
-    }
-}
-
 fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
     let (alg, grid) = input;
 
-    let mut pixels = HashSet::new();
-    let mut fill_pixel = false;
-    let mut min_x = i32::MAX;
-    let mut max_x = i32::MIN;
-    let mut min_y = i32::MAX;
-    let mut max_y = i32::MIN;
-
+    let w = grid[0].len() + 2 * steps;
+    let h = grid.len() + 2 * steps;
+    let mut pixels = bitvec![Msb0, usize; 0; w * h];
     for (y, row) in grid.iter().enumerate() {
         for (x, lit) in row.iter().enumerate() {
-            if *lit {
-                pixels.insert((x as i32, y as i32));
-                min_x = min_x.min(x as i32);
-                max_x = max_x.max(x as i32);
-                min_y = min_y.min(y as i32);
-                max_y = max_y.max(y as i32);
-            }
+            pixels.set((x + steps) + w * (y + steps), *lit);
         }
     }
 
-    for _step in 0..steps {
-        let mut next_pixels = HashSet::new();
-        let mut next_min_x = i32::MAX;
-        let mut next_max_x = i32::MIN;
-        let mut next_min_y = i32::MAX;
-        let mut next_max_y = i32::MIN;
+    let mut fill_pixel = false;
 
-        for y in (min_y - 1)..=(max_y + 1) {
-            for x in (min_x - 1)..=(max_x + 1) {
+    for _step in 0..steps {
+        let mut next_pixels = bitvec![Msb0, usize; 0; w * h];
+
+        for y in 0..h {
+            for x in 0..w {
                 let mut bits = bitvec![Msb0, usize;];
-                for ny in (y - 1)..=(y + 1) {
-                    for nx in (x - 1)..=(x + 1) {
-                        let prev_pixel = if nx < min_x || max_x < nx || ny < min_y || max_y < ny {
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        let prev_pixel = if {
+                            (x == 0 && dx == -1)
+                                || (x == w - 1 && dx == 1)
+                                || (y == 0 && dy == -1)
+                                || (y == h - 1 && dy == 1)
+                        } {
                             fill_pixel
                         } else {
-                            pixels.contains(&(nx, ny))
+                            let nx = (x as i32 + dx) as usize;
+                            let ny = (y as i32 + dy) as usize;
+                            pixels[nx + w * ny]
                         };
 
                         bits.push(prev_pixel);
@@ -77,13 +59,7 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
                 }
 
                 let idx = bits.load::<usize>();
-                if alg[idx] {
-                    next_pixels.insert((x, y));
-                    next_min_x = next_min_x.min(x);
-                    next_max_x = next_max_x.max(x);
-                    next_min_y = next_min_y.min(y);
-                    next_max_y = next_max_y.max(y);
-                }
+                next_pixels.set(x + w * y, alg[idx]);
             }
         }
 
@@ -93,15 +69,10 @@ fn solve(input: &(Vec<bool>, Vec<Vec<bool>>), steps: usize) -> usize {
             alg[0]
         };
 
-        // Swap state
         pixels = next_pixels;
-        min_x = next_min_x;
-        max_x = next_max_x;
-        min_y = next_min_y;
-        max_y = next_max_y;
     }
 
-    pixels.len()
+    pixels.count_ones()
 }
 
 #[aoc(day20, part1)]
