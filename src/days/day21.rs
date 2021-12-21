@@ -39,7 +39,7 @@ pub fn solve_part1(input: &(usize, usize)) -> usize {
         let mut die_total = 0;
         for _ in 0..3 {
             die_rolls += 1;
-            die_total += die_rolls % 100;
+            die_total += die_rolls;
         }
 
         *current_pos = (*current_pos + die_total) % 10;
