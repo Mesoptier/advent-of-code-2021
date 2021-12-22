@@ -164,36 +164,29 @@ pub fn input_generator(input: &str) -> Vec<(bool, Cuboid)> {
     )(input).unwrap().1
 }
 
-// #[aoc(day22, part1)]
-// pub fn solve_part1(input: &Vec<(bool, RangeInclusive<i32>, RangeInclusive<i32>, RangeInclusive<i32>)>) -> usize {
-//     let mut cubes: HashSet<(i32, i32, i32)> = HashSet::new();
-//
-//     for (state, x_range, y_range, z_range) in input {
-//         for x in range_intersect(x_range.clone(), -50..=50) {
-//             for y in range_intersect(y_range.clone(), -50..=50) {
-//                 for z in range_intersect(z_range.clone(), -50..=50) {
-//                     if *state {
-//                         cubes.insert((x, y, z));
-//                     } else {
-//                         cubes.remove(&(x, y, z));
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//
-//     cubes.len()
-// }
-
-
-#[aoc(day22, part2)]
-pub fn solve_part2(input: &Vec<(bool, Cuboid)>) -> usize {
+fn solve_both_parts(input: &Vec<(bool, Cuboid)>, part1: bool) -> usize {
     let mut on_cuboids = vec![];
 
-    for (state, cuboid) in input {
+    for (state, mut cuboid) in input {
+        // Part 1: intersect cuboid with intersection area, skip if intersection is empty
+        if part1 {
+            if let Some(intersection) = cuboid.intersection(&Cuboid {
+                x1: -50,
+                x2: 50,
+                y1: -50,
+                y2: 50,
+                z1: -50,
+                z2: 50,
+            }) {
+                cuboid = intersection;
+            } else {
+                continue;
+            }
+        }
+
         if *state {
             // State: on
-            let mut new_cuboids = vec![*cuboid];
+            let mut new_cuboids = vec![cuboid];
 
             for on_cuboid in &on_cuboids {
                 new_cuboids = new_cuboids
@@ -210,11 +203,21 @@ pub fn solve_part2(input: &Vec<(bool, Cuboid)>) -> usize {
             on_cuboids = on_cuboids
                 .into_iter()
                 .flat_map(|on_cuboid| {
-                    on_cuboid.sub(cuboid)
+                    on_cuboid.sub(&cuboid)
                 })
                 .collect_vec()
         }
     }
 
     on_cuboids.into_iter().map(|c| c.size()).sum::<usize>()
+}
+
+#[aoc(day22, part1)]
+pub fn solve_part1(input: &Vec<(bool, Cuboid)>) -> usize {
+    solve_both_parts(input, true)
+}
+
+#[aoc(day22, part2)]
+pub fn solve_part2(input: &Vec<(bool, Cuboid)>) -> usize {
+    solve_both_parts(input, false)
 }
