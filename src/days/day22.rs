@@ -217,12 +217,8 @@ impl CuboidNode {
 
     fn sub(&mut self, cuboid: Cuboid) {
         match self {
-            CuboidNode::Nil => {
-                return;
-            }
+            CuboidNode::Nil => {}
             CuboidNode::Split { split_axis, left, right } => {
-                // TODO: Do we really need to split the cuboid here? Since it's a subtracting cuboid,
-                //  the invariant won't be broken if this cuboid stays at its original size.
                 let (left_cuboid, right_cuboid) = cuboid.split(*split_axis);
                 if let Some(left_cuboid) = left_cuboid {
                     left.sub(left_cuboid);
@@ -230,8 +226,6 @@ impl CuboidNode {
                 if let Some(right_cuboid) = right_cuboid {
                     right.sub(right_cuboid);
                 }
-
-                // TODO: Simplify if left/right is Nil after calling .sub()
             }
             CuboidNode::Leaf(leaf_cuboid) => {
                 if cuboid.contains(leaf_cuboid) {
