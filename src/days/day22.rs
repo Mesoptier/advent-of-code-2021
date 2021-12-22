@@ -68,13 +68,6 @@ impl Cuboid {
         })
     }
 
-    fn disjoint(&self, other: &Cuboid) -> bool {
-        Axis::iter().all(|&axis| {
-            self.upper(axis) < other.lower(axis)
-                || other.upper(axis) < self.lower(axis)
-        })
-    }
-
     fn intersection(&self, other: &Cuboid) -> Option<Cuboid> {
         let x1 = self.x1.max(other.x1);
         let x2 = self.x2.min(other.x2);
@@ -164,18 +157,18 @@ impl CuboidNode {
         }
     }
 
-    fn add(&mut self, cuboid: Cuboid) {
+    fn add(&mut self, add_cuboid: Cuboid) {
         match self {
             CuboidNode::Nil => {
-                *self = CuboidNode::Leaf(cuboid);
+                *self = CuboidNode::Leaf(add_cuboid);
             }
             CuboidNode::Split { bounding_cuboid, split_axis, left, right } => {
-                if cuboid.contains(bounding_cuboid) {
-                    *self = CuboidNode::Leaf(cuboid);
+                if add_cuboid.contains(bounding_cuboid) {
+                    *self = CuboidNode::Leaf(add_cuboid);
                     return;
                 }
 
-                let (left_cuboid, right_cuboid) = cuboid.split(*split_axis);
+                let (left_cuboid, right_cuboid) = add_cuboid.split(*split_axis);
                 if let Some(left_cuboid) = left_cuboid {
                     left.add(left_cuboid);
                 }
@@ -183,39 +176,39 @@ impl CuboidNode {
                     right.add(right_cuboid);
                 }
 
-                *bounding_cuboid = Cuboid::bounding(cuboid, *bounding_cuboid);
+                *bounding_cuboid = Cuboid::bounding(add_cuboid, *bounding_cuboid);
             }
             CuboidNode::Leaf(leaf_cuboid) => {
                 // Handle cases where cuboids completely overlap
-                if leaf_cuboid.contains(&cuboid) {
+                if leaf_cuboid.contains(&add_cuboid) {
                     return;
                 }
-                if cuboid.contains(leaf_cuboid) {
-                    *leaf_cuboid = cuboid;
+                if add_cuboid.contains(leaf_cuboid) {
+                    *leaf_cuboid = add_cuboid;
                     return;
                 }
 
-                let bounding_cuboid = Cuboid::bounding(cuboid, *leaf_cuboid);
+                let bounding_cuboid = Cuboid::bounding(add_cuboid, *leaf_cuboid);
 
                 // Handle cases where cuboids are completely disjoint
                 for &axis in Axis::iter() {
-                    if cuboid.upper(axis) < leaf_cuboid.lower(axis) {
+                    if add_cuboid.upper(axis) < leaf_cuboid.lower(axis) {
                         let split_axis: SplitAxis = (axis, leaf_cuboid.lower(axis));
                         *self = CuboidNode::Split {
                             bounding_cuboid,
                             split_axis,
-                            left: CuboidNode::Leaf(cuboid).into(),
+                            left: CuboidNode::Leaf(add_cuboid).into(),
                             right: CuboidNode::Leaf(*leaf_cuboid).into(),
                         };
                         return;
                     }
-                    if leaf_cuboid.upper(axis) < cuboid.lower(axis) {
-                        let split_axis: SplitAxis = (axis, cuboid.lower(axis));
+                    if leaf_cuboid.upper(axis) < add_cuboid.lower(axis) {
+                        let split_axis: SplitAxis = (axis, add_cuboid.lower(axis));
                         *self = CuboidNode::Split {
                             bounding_cuboid,
                             split_axis,
                             left: CuboidNode::Leaf(*leaf_cuboid).into(),
-                            right: CuboidNode::Leaf(cuboid).into(),
+                            right: CuboidNode::Leaf(add_cuboid).into(),
                         };
                         return;
                     }
@@ -224,18 +217,18 @@ impl CuboidNode {
                 // Handle cases where cuboids partially overlap (complete overlap is handled above)
                 for &axis in Axis::iter() {
                     if let Some((split_axis, left_node, right_node)) = {
-                        if cuboid.lower(axis) < leaf_cuboid.lower(axis) {
+                        if add_cuboid.lower(axis) < leaf_cuboid.lower(axis) {
                             let split_axis: SplitAxis = (axis, leaf_cuboid.lower(axis));
-                            let (left_cuboid, right_cuboid) = cuboid.split(split_axis);
+                            let (left_cuboid, right_cuboid) = add_cuboid.split(split_axis);
 
                             let left_node = CuboidNode::Leaf(left_cuboid.unwrap());
                             let mut right_node = CuboidNode::Leaf(*leaf_cuboid);
                             right_node.add(right_cuboid.unwrap());
 
                             Some((split_axis, left_node, right_node))
-                        } else if leaf_cuboid.upper(axis) < cuboid.upper(axis) {
+                        } else if leaf_cuboid.upper(axis) < add_cuboid.upper(axis) {
                             let split_axis: SplitAxis = (axis, leaf_cuboid.upper(axis) + 1);
-                            let (left_cuboid, right_cuboid) = cuboid.split(split_axis);
+                            let (left_cuboid, right_cuboid) = add_cuboid.split(split_axis);
 
                             let mut left_node = CuboidNode::Leaf(*leaf_cuboid);
                             left_node.add(left_cuboid.unwrap());
@@ -261,17 +254,17 @@ impl CuboidNode {
         }
     }
 
-    fn sub(&mut self, cuboid: Cuboid) {
+    fn sub(&mut self, sub_cuboid: Cuboid) {
         match self {
             CuboidNode::Nil => {}
             CuboidNode::Split { bounding_cuboid, split_axis, left, right } => {
-                // Simplify early if cuboid completely overlaps child cuboids
-                if cuboid.contains(bounding_cuboid) {
+                // Simplify early if sub_cuboid completely overlaps child cuboids
+                if sub_cuboid.contains(bounding_cuboid) {
                     *self =  CuboidNode::Nil;
                     return;
                 }
 
-                let (left_cuboid, right_cuboid) = cuboid.split(*split_axis);
+                let (left_cuboid, right_cuboid) = sub_cuboid.split(*split_axis);
                 if let Some(left_cuboid) = left_cuboid {
                     left.sub(left_cuboid);
                 }
@@ -297,17 +290,17 @@ impl CuboidNode {
                 }
             }
             CuboidNode::Leaf(leaf_cuboid) => {
-                if cuboid.contains(leaf_cuboid) {
+                if sub_cuboid.contains(leaf_cuboid) {
                     *self = CuboidNode::Nil;
                     return;
                 }
 
                 // Handle cases where cuboids are completely disjoint
                 for &axis in Axis::iter() {
-                    if cuboid.upper(axis) < leaf_cuboid.lower(axis) {
+                    if sub_cuboid.upper(axis) < leaf_cuboid.lower(axis) {
                         return;
                     }
-                    if leaf_cuboid.upper(axis) < cuboid.lower(axis) {
+                    if leaf_cuboid.upper(axis) < sub_cuboid.lower(axis) {
                         return;
                     }
                 }
@@ -315,22 +308,22 @@ impl CuboidNode {
                 // Handle cases where cuboids overlap
                 for &axis in Axis::iter() {
                     if let Some((split_axis, left_node, right_node)) = {
-                        if cuboid.upper(axis) < leaf_cuboid.upper(axis) {
-                            let split_axis: SplitAxis = (axis, cuboid.upper(axis) + 1);
+                        if sub_cuboid.upper(axis) < leaf_cuboid.upper(axis) {
+                            let split_axis: SplitAxis = (axis, sub_cuboid.upper(axis) + 1);
                             let (left_cuboid, right_cuboid) = leaf_cuboid.split(split_axis);
 
                             let mut left_node = CuboidNode::Leaf(left_cuboid.unwrap());
-                            left_node.sub(cuboid);
+                            left_node.sub(sub_cuboid);
                             let right_node = CuboidNode::Leaf(right_cuboid.unwrap());
 
                             Some((split_axis, left_node, right_node))
-                        } else if leaf_cuboid.lower(axis) < cuboid.lower(axis) {
-                            let split_axis: SplitAxis = (axis, cuboid.lower(axis));
+                        } else if leaf_cuboid.lower(axis) < sub_cuboid.lower(axis) {
+                            let split_axis: SplitAxis = (axis, sub_cuboid.lower(axis));
                             let (left_cuboid, right_cuboid) = leaf_cuboid.split(split_axis);
 
                             let left_node = CuboidNode::Leaf(left_cuboid.unwrap());
                             let mut right_node = CuboidNode::Leaf(right_cuboid.unwrap());
-                            right_node.sub(cuboid);
+                            right_node.sub(sub_cuboid);
 
                             Some((split_axis, left_node, right_node))
                         } else {
