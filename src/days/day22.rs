@@ -357,7 +357,7 @@ fn solve_both_parts(input: &Vec<(bool, Cuboid)>, part1: bool) -> usize {
     };
 
     for (state, mut cuboid) in input {
-        // Part 1: intersect cuboid with intersection area, skip if intersection is empty
+        // Part 1: intersect cuboid with initialization area, skip if intersection is empty
         if part1 {
             if let Some(intersection) = cuboid.intersection(&initialization_area) {
                 cuboid = intersection;
