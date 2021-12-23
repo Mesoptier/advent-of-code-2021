@@ -33,12 +33,12 @@ impl Amphipod {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct State {
+pub struct State<const R: usize> {
     hallway: [Option<Amphipod>; 11],
-    rooms: [[Option<Amphipod>; 2]; 4],
+    rooms: [[Option<Amphipod>; R]; 4],
 }
 
-impl State {
+impl<const R: usize> State<R> {
     fn is_complete(&self) -> bool {
         self.rooms.iter().enumerate().all(|(room_index, room)| {
             room.iter().all(|space| match space {
@@ -85,7 +85,7 @@ impl State {
         slice.iter().all(|space| space.is_none())
     }
 
-    fn adjacent_states(&self) -> Vec<(State, usize)> {
+    fn adjacent_states(&self) -> Vec<(State<R>, usize)> {
         let mut states = vec![];
 
         // (room -> room), (room -> hallway)
@@ -247,7 +247,7 @@ impl State {
     }
 }
 
-impl Display for State {
+impl<const R: usize> Display for State<R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let space_to_str = |space: Option<Amphipod>| -> &str {
             match space {
@@ -262,7 +262,9 @@ impl Display for State {
         writeln!(f, "{}", "#".repeat(self.hallway.len() + 2))?;
         writeln!(f, "#{}#", self.hallway.map(space_to_str).join(""))?;
         writeln!(f, "###{}###", self.rooms.map(|r| space_to_str(r[0])).join("#"))?;
-        writeln!(f, "  #{}#  ", self.rooms.map(|r| space_to_str(r[1])).join("#"))?;
+        for room_depth in 1..R {
+            writeln!(f, "  #{}#  ", self.rooms.map(|r| space_to_str(r[room_depth])).join("#"))?;
+        }
         write!(f, "  {}  ", "#".repeat(self.rooms.len() * 2 + 1))?;
 
         Ok(())
@@ -270,62 +272,79 @@ impl Display for State {
 }
 
 #[aoc_generator(day23)]
-pub fn input_generator(input: &str) -> State {
+pub fn input_generator(input: &str) -> Vec<Amphipod> {
     let amphipods = input.chars()
-        .map(|c| match c {
+        .filter_map(|c| match c {
             'A' => Some(Amphipod::A),
             'B' => Some(Amphipod::B),
             'C' => Some(Amphipod::C),
             'D' => Some(Amphipod::D),
             _ => None,
         })
-        .filter(|a| a.is_some())
         .collect::<Vec<_>>();
 
     assert_eq!(amphipods.len(), 8);
 
-    State {
-        hallway: [None; 11],
-        rooms: [
-            [amphipods[0], amphipods[4]],
-            [amphipods[1], amphipods[5]],
-            [amphipods[2], amphipods[6]],
-            [amphipods[3], amphipods[7]],
-        ],
-    }
+    amphipods
 }
 
 #[derive(PartialEq, Eq)]
-struct Entry {
-    state: State,
+struct Entry<const R: usize> {
+    state: State<R>,
     f_score: usize,
 }
 
-impl PartialOrd<Self> for Entry {
+impl<const R: usize> PartialOrd<Self> for Entry<R> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for Entry {
+impl<const R: usize> Ord for Entry<R> {
     fn cmp(&self, other: &Self) -> Ordering {
         self.f_score.cmp(&other.f_score).reverse()
     }
 }
 
 #[aoc(day23, part1)]
-pub fn solve_part1(input: &State) -> usize {
-    // println!("{}", input);
-    // println!();
+pub fn solve_part1(input: &Vec<Amphipod>) -> usize {
+    let initial_state = State {
+        hallway: [None; 11],
+        rooms: [
+            [Some(input[0]), Some(input[4])],
+            [Some(input[1]), Some(input[5])],
+            [Some(input[2]), Some(input[6])],
+            [Some(input[3]), Some(input[7])],
+        ],
+    };
 
+    solve_both_parts(initial_state)
+}
+
+#[aoc(day23, part2)]
+pub fn solve_part2(input: &Vec<Amphipod>) -> usize {
+    let initial_state = State {
+        hallway: [None; 11],
+        rooms: [
+            [input[0], Amphipod::D, Amphipod::D, input[4]].map(|a| Some(a)),
+            [input[1], Amphipod::C, Amphipod::B, input[5]].map(|a| Some(a)),
+            [input[2], Amphipod::B, Amphipod::A, input[6]].map(|a| Some(a)),
+            [input[3], Amphipod::A, Amphipod::C, input[7]].map(|a| Some(a)),
+        ],
+    };
+
+    solve_both_parts(initial_state)
+}
+
+fn solve_both_parts<const R: usize>(initial_state: State<R>) -> usize {
     let mut q = BinaryHeap::new();
     q.push(Entry {
-        state: *input,
+        state: initial_state,
         f_score: 0,
     });
 
-    let mut g_score: HashMap<State, usize> = HashMap::new();
-    g_score.insert(*input, 0);
+    let mut g_score: HashMap<State<R>, usize> = HashMap::new();
+    g_score.insert(initial_state, 0);
 
     while let Some(Entry { state, f_score }) = q.pop() {
         if state.is_complete() {
