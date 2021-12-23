@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::fmt::{Display, Formatter};
-use hashbrown::HashSet;
+
+use hashbrown::{HashMap, HashSet};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Amphipod {
@@ -188,6 +189,39 @@ impl State {
 
         states
     }
+
+    fn h_score(&self) -> usize {
+        self.rooms.iter()
+            .enumerate()
+            .flat_map(|(room_index, room)| {
+                room.iter()
+                    .enumerate()
+                    .map(move |(room_depth, space)| {
+                        match space {
+                            None => 0,
+                            Some(amphipod) => {
+                                let target_room_index = amphipod.target_room_index();
+
+                                if room_index == target_room_index {
+                                    return 0;
+                                }
+
+                                let current_x = self.room_to_hallway(room_index);
+                                let target_x = self.room_to_hallway(target_room_index);
+                                let hallway_steps = if current_x < target_x {
+                                    target_x - current_x
+                                } else {
+                                    current_x - target_x
+                                };
+
+                                let steps = hallway_steps + room_depth + 1;
+                                steps * amphipod.energy()
+                            }
+                        }
+                    })
+            })
+            .sum()
+    }
 }
 
 impl Display for State {
@@ -241,7 +275,7 @@ pub fn input_generator(input: &str) -> State {
 #[derive(PartialEq, Eq)]
 struct Entry {
     state: State,
-    energy: usize,
+    f_score: usize,
 }
 
 impl PartialOrd<Self> for Entry {
@@ -252,7 +286,7 @@ impl PartialOrd<Self> for Entry {
 
 impl Ord for Entry {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.energy.cmp(&other.energy).reverse()
+        self.f_score.cmp(&other.f_score).reverse()
     }
 }
 
@@ -264,23 +298,24 @@ pub fn solve_part1(input: &State) -> usize {
     let mut q = BinaryHeap::new();
     q.push(Entry {
         state: *input,
-        energy: 0,
+        f_score: 0,
     });
 
-    let mut closed = HashSet::new();
+    let mut g_score: HashMap<State, usize> = HashMap::new();
+    g_score.insert(*input, 0);
 
-    while let Some(Entry { state, energy }) = q.pop() {
-        closed.insert(state);
-
+    while let Some(Entry { state, f_score }) = q.pop() {
         if state.is_complete() {
-            return energy;
+            return f_score;
         }
 
         for (next_state, delta_energy) in state.adjacent_states() {
-            if !closed.contains(&next_state) {
+            let tentative_g_score = g_score[&state] + delta_energy;
+            if tentative_g_score < *g_score.get(&next_state).unwrap_or(&usize::MAX) {
+                g_score.insert(next_state, tentative_g_score);
                 q.push(Entry {
                     state: next_state,
-                    energy: energy + delta_energy,
+                    f_score: tentative_g_score + next_state.h_score(),
                 });
             }
         }
