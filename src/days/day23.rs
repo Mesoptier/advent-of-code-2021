@@ -88,15 +88,17 @@ impl<const R: usize> State<R> {
         }
     }
 
-    /// Checks whether the current state is the goal state (i.e., all amphipods are in their target
-    /// room).
-    fn is_goal(&self) -> bool {
-        self.rooms.iter().enumerate().all(|(room_index, room)| {
-            room.iter().all(|space| match space {
-                None => false,
-                Some(amphipod) => amphipod.target_room_index() == room_index,
-            })
-        })
+    /// Get the goal state.
+    fn goal() -> Self {
+        Self {
+            hallway: [None; 11],
+            rooms: [
+                [Some(Amphipod::A); R],
+                [Some(Amphipod::B); R],
+                [Some(Amphipod::C); R],
+                [Some(Amphipod::D); R],
+            ]
+        }
     }
 
     /// Checks whether the room with the given index can be entered (by a matching amphipod).
@@ -410,12 +412,14 @@ fn solve_both_parts<const R: usize>(initial_state: State<R>) -> usize {
     let mut g_score: HashMap<usize, usize> = HashMap::new();
     g_score.insert(initial_state.encode(), 0);
 
-    while let Some(Entry { encoded_state, f_score }) = q.pop() {
-        let state = State::<R>::decode(encoded_state);
+    let encoded_goal_state = State::<R>::goal().encode();
 
-        if state.is_goal() {
+    while let Some(Entry { encoded_state, f_score }) = q.pop() {
+        if encoded_state == encoded_goal_state {
             return f_score;
         }
+
+        let state = State::<R>::decode(encoded_state);
 
         for (next_state, delta_energy) in state.transitions() {
             let encoded_next_state = next_state.encode();
