@@ -5,7 +5,7 @@ use std::fmt::{Display, Formatter};
 use hashbrown::HashMap;
 
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Amphipod {
     A = 0,
     B = 1,
@@ -36,7 +36,7 @@ fn abs_diff(a: usize, b: usize) -> usize {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 struct State<const R: usize> {
     // NOTE: This array could be shrunk to hold only 7 elements to save some memory, but it's easier
     // to work with if it has 11 entries (4 of which will always be None).
