@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::fmt::{Display, Formatter};
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Amphipod {
@@ -191,7 +191,7 @@ impl State {
     }
 
     fn h_score(&self) -> usize {
-        self.rooms.iter()
+        let room_room = self.rooms.iter()
             .enumerate()
             .flat_map(|(room_index, room)| {
                 room.iter()
@@ -214,13 +214,36 @@ impl State {
                                     current_x - target_x
                                 };
 
-                                let steps = hallway_steps + room_depth + 1;
+                                let steps = hallway_steps + room_depth + 2;
                                 steps * amphipod.energy()
                             }
                         }
                     })
             })
-            .sum()
+            .sum::<usize>();
+
+        let hallway_room = self.hallway.iter()
+            .enumerate()
+            .map(|(current_x, space)| {
+                match space {
+                    None => 0,
+                    Some(amphipod) => {
+                        let target_room_index = amphipod.target_room_index();
+                        let target_x = self.room_to_hallway(target_room_index);
+                        let hallway_steps = if current_x < target_x {
+                            target_x - current_x
+                        } else {
+                            current_x - target_x
+                        };
+
+                        let steps = hallway_steps + 1;
+                        steps * amphipod.energy()
+                    }
+                }
+            })
+            .sum::<usize>();
+
+        room_room + hallway_room
     }
 }
 
