@@ -22,6 +22,14 @@ impl Amphipod {
     }
 }
 
+fn abs_diff(a: usize, b: usize) -> usize {
+    if a < b {
+        b - a
+    } else {
+        a - b
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 struct State<const R: usize> {
     // TODO: Shrink this array to 7 elements, since spaces above rooms are invalid
@@ -54,7 +62,7 @@ impl<const R: usize> State<R> {
     }
 
     /// Maps from room index to hallway position of the space above the room.
-    fn room_to_hallway(&self, room_index: usize) -> usize {
+    fn room_x(&self, room_index: usize) -> usize {
         2 + (room_index) * 2
     }
 
@@ -76,109 +84,91 @@ impl<const R: usize> State<R> {
         slice.iter().all(|space| space.is_none())
     }
 
-    fn adjacent_states(&self) -> Vec<(State<R>, usize)> {
-        let mut states = vec![];
+    fn transitions(&self) -> Vec<(State<R>, usize)> {
+        let mut transitions = self.room_to_hallway_transitions();
+        transitions.extend(self.hallway_to_room_transitions().into_iter());
+        transitions
+    }
 
-        // (room -> room), (room -> hallway)
-        for (room_index, room) in self.rooms.iter().enumerate() {
-            if !self.is_room_exitable(room_index) {
-                continue;
-            }
+    fn room_to_hallway_transitions(&self) -> Vec<(State<R>, usize)> {
+        self.rooms.iter()
+            .enumerate()
+            .filter(|(room_index, _)| self.is_room_exitable(*room_index))
+            .flat_map(|(room_index, room)| {
+                // Find top-most amphipod
+                // This always succeeds, because of the is_room_exitable check above
+                let (room_depth, amphipod) = room.iter()
+                    .enumerate()
+                    .find_map(|(room_depth, space)| {
+                        space.map(|amphipod| (room_depth, amphipod))
+                    })
+                    .unwrap();
 
-            for (room_depth, space) in room.iter().enumerate() {
-                match space {
-                    None => {}
-                    Some(amphipod) => {
-                        let current_x = self.room_to_hallway(room_index);
-                        let steps = room_depth + 1;
+                let current_x = self.room_x(room_index);
 
-                        // Move to target room
-                        let target_room_index = amphipod.target_room_index();
-                        if self.is_room_enterable(target_room_index) {
-                            assert_ne!(target_room_index, room_index);
+                // Step in either direction as long as there is empty space
+                // TODO: Move this into a separate method
+                let left_it = (0..current_x).rev()
+                    .take_while(|x| self.hallway[*x].is_none());
+                let right_it = ((current_x + 1)..self.hallway.len())
+                    .take_while(|x| self.hallway[*x].is_none());
+                left_it
+                    .chain(right_it)
+                    // Cannot move to a space directly above a room
+                    .filter(|target_x| !self.is_above_room(*target_x))
+                    .map(move |target_x| {
+                        let steps = room_depth + 1 + abs_diff(current_x, target_x);
+                        let energy = steps * amphipod.energy();
 
-                            let target_x = self.room_to_hallway(target_room_index);
-                            if self.is_hallway_clear(current_x, target_x) {
-                                let target_room_depth = self.rooms[target_room_index].iter()
-                                    .rposition(|space| space.is_none())
-                                    .unwrap();
+                        let mut state = *self;
+                        std::mem::swap(
+                            &mut state.rooms[room_index][room_depth],
+                            &mut state.hallway[target_x],
+                        );
+                        (state, energy)
+                    })
+            })
+            .collect()
+    }
 
-                                let hallway_steps = if current_x < target_x {
-                                    target_x - current_x
-                                } else {
-                                    current_x - target_x
-                                };
+    fn hallway_to_room_transitions(&self) -> Vec<(State<R>, usize)> {
+        self.hallway.iter()
+            .enumerate()
+            // Skip empty spaces
+            .filter_map(|(current_x, space)| {
+                space.map(|amphipod| (current_x, amphipod))
+            })
+            .filter_map(|(current_x, amphipod)| {
+                let target_room_index = amphipod.target_room_index();
 
-                                let steps = steps + (target_room_depth + 1) + hallway_steps;
-
-                                let mut state = *self;
-                                state.rooms[target_room_index][target_room_depth] = Some(*amphipod);
-                                state.rooms[room_index][room_depth] = None;
-                                states.push((state, steps * amphipod.energy()));
-                            }
-                        }
-
-                        // Move to hallway
-                        for target_x in 0..self.hallway.len() {
-                            if self.is_above_room(target_x) {
-                                continue;
-                            }
-
-                            if self.is_hallway_clear(current_x, target_x) {
-                                let hallway_steps = if current_x < target_x {
-                                    target_x - current_x
-                                } else {
-                                    current_x - target_x
-                                };
-
-                                let steps = steps + hallway_steps;
-
-                                let mut state = *self;
-                                state.hallway[target_x] = Some(*amphipod);
-                                state.rooms[room_index][room_depth] = None;
-                                states.push((state, steps * amphipod.energy()));
-                            }
-                        }
-
-                        // Only the top-most amphipod can move out of a room
-                        break;
-                    }
+                if !self.is_room_enterable(target_room_index) {
+                    // Target room still has other amphipods in it
+                    return None;
                 }
-            }
-        }
 
-        // (hallway -> room)
-        for (current_x, space) in self.hallway.iter().enumerate() {
-            match space {
-                None => {}
-                Some(amphipod) => {
-                    let target_room_index = amphipod.target_room_index();
-                    if self.is_room_enterable(target_room_index) {
-                        let target_x = self.room_to_hallway(target_room_index);
-                        if self.is_hallway_clear(current_x, target_x) {
-                            let target_room_depth = self.rooms[target_room_index].iter()
-                                .rposition(|space| space.is_none())
-                                .unwrap();
+                let target_x = self.room_x(target_room_index);
 
-                            let hallway_steps = if current_x < target_x {
-                                target_x - current_x
-                            } else {
-                                current_x - target_x
-                            };
-
-                            let steps = (target_room_depth + 1) + hallway_steps;
-
-                            let mut state = *self;
-                            state.rooms[target_room_index][target_room_depth] = Some(*amphipod);
-                            state.hallway[current_x] = None;
-                            states.push((state, steps * amphipod.energy()));
-                        }
-                    }
+                if !self.is_hallway_clear(current_x, target_x) {
+                    // Cannot move through other amphipods
+                    return None;
                 }
-            }
-        }
 
-        states
+                let target_room_depth = self.rooms[target_room_index].iter()
+                    .rposition(|space| space.is_none())
+                    .unwrap();
+
+                let steps = target_room_depth + 1 + abs_diff(current_x, target_x);
+                let energy = steps * amphipod.energy();
+
+                let mut state = *self;
+                std::mem::swap(
+                    &mut state.rooms[target_room_index][target_room_depth],
+                    &mut state.hallway[current_x],
+                );
+
+                Some((state, energy))
+            })
+            .collect()
     }
 
     fn h_score(&self) -> usize {
@@ -197,8 +187,8 @@ impl<const R: usize> State<R> {
                                     return 0;
                                 }
 
-                                let current_x = self.room_to_hallway(room_index);
-                                let target_x = self.room_to_hallway(target_room_index);
+                                let current_x = self.room_x(room_index);
+                                let target_x = self.room_x(target_room_index);
                                 let hallway_steps = if current_x < target_x {
                                     target_x - current_x
                                 } else {
@@ -220,7 +210,7 @@ impl<const R: usize> State<R> {
                     None => 0,
                     Some(amphipod) => {
                         let target_room_index = amphipod.target_room_index();
-                        let target_x = self.room_to_hallway(target_room_index);
+                        let target_x = self.room_x(target_room_index);
                         let hallway_steps = if current_x < target_x {
                             target_x - current_x
                         } else {
@@ -342,7 +332,7 @@ fn solve_both_parts<const R: usize>(initial_state: State<R>) -> usize {
             return f_score;
         }
 
-        for (next_state, delta_energy) in state.adjacent_states() {
+        for (next_state, delta_energy) in state.transitions() {
             let tentative_g_score = g_score[&state] + delta_energy;
             if tentative_g_score < *g_score.get(&next_state).unwrap_or(&usize::MAX) {
                 g_score.insert(next_state, tentative_g_score);
