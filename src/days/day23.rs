@@ -6,34 +6,25 @@ use hashbrown::HashMap;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Amphipod {
-    A,
-    B,
-    C,
-    D,
+    A = 0,
+    B = 1,
+    C = 2,
+    D = 3,
 }
 
 impl Amphipod {
     fn energy(&self) -> usize {
-        match self {
-            Amphipod::A => 1,
-            Amphipod::B => 10,
-            Amphipod::C => 100,
-            Amphipod::D => 1000,
-        }
+        10usize.pow(*self as u32)
     }
 
     fn target_room_index(&self) -> usize {
-        match self {
-            Amphipod::A => 0,
-            Amphipod::B => 1,
-            Amphipod::C => 2,
-            Amphipod::D => 3,
-        }
+        *self as usize
     }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct State<const R: usize> {
+struct State<const R: usize> {
+    // TODO: Shrink this array to 7 elements, since spaces above rooms are invalid
     hallway: [Option<Amphipod>; 11],
     rooms: [[Option<Amphipod>; R]; 4],
 }
