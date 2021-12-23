@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 
 use hashbrown::HashMap;
 
+#[repr(u8)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Amphipod {
     A = 0,
@@ -19,6 +20,11 @@ impl Amphipod {
 
     fn target_room_index(&self) -> usize {
         *self as usize
+    }
+
+    fn from_room_index(room_index: usize) -> Self {
+        assert!(room_index < 4);
+        unsafe { std::mem::transmute(room_index as u8) }
     }
 }
 
@@ -84,6 +90,7 @@ impl<const R: usize> State<R> {
         slice.iter().all(|space| space.is_none())
     }
 
+    /// Get all valid transitions from this state, together with their energy costs.
     fn transitions(&self) -> Vec<(State<R>, usize)> {
         let mut transitions = self.room_to_hallway_transitions();
         transitions.extend(self.hallway_to_room_transitions().into_iter());
@@ -172,59 +179,78 @@ impl<const R: usize> State<R> {
     }
 
     fn h_score(&self) -> usize {
-        let room_room = self.rooms.iter()
+        // Energy cost of amphipods exiting rooms and moving to the space above their target room
+        let exit_room = self.rooms.iter()
             .enumerate()
             .flat_map(|(room_index, room)| {
-                room.iter()
-                    .enumerate()
-                    .map(move |(room_depth, space)| {
-                        match space {
-                            None => 0,
-                            Some(amphipod) => {
-                                let target_room_index = amphipod.target_room_index();
+                let current_x = self.room_x(room_index);
 
-                                if room_index == target_room_index {
-                                    return 0;
-                                }
+                // Amphipods that must move out of the current room, either because they belong in
+                // another room, or because they have to get out of the way for an amphipod below.
+                room.iter().enumerate().rev()
+                    .filter_map(|(room_depth, space)| {
+                        // Filter out empty spaces
+                        space.map(|amphipod| (room_depth, amphipod))
+                    })
+                    .skip_while(move |(_, amphipod)| {
+                        // Skip amphipods that don't need to move
+                        amphipod.target_room_index() == room_index
+                    })
+                    .map(move |(room_depth, amphipod)| {
+                        let target_room_index = amphipod.target_room_index();
+                        let target_x = self.room_x(target_room_index);
 
-                                let current_x = self.room_x(room_index);
-                                let target_x = self.room_x(target_room_index);
-                                let hallway_steps = if current_x < target_x {
-                                    target_x - current_x
-                                } else {
-                                    current_x - target_x
-                                };
+                        // Minimum number of steps this amphipod must make in the hallway.
+                        // For amphipods not in the right room, this is the number of steps to reach
+                        // the target room. For amphipods that ARE in the right room, but need to
+                        // make space, this is 2 (since it needs to move aside and back again).
+                        let hallway_steps = abs_diff(current_x, target_x).max(2);
+                        let steps = room_depth + 1 + hallway_steps;
 
-                                let steps = hallway_steps + room_depth + 2;
-                                steps * amphipod.energy()
-                            }
-                        }
+                        steps * amphipod.energy()
                     })
             })
             .sum::<usize>();
 
-        let hallway_room = self.hallway.iter()
+        // Energy cost of amphipods in the hallway moving to the space above their target room
+        let move_hallway = self.hallway.iter()
             .enumerate()
-            .map(|(current_x, space)| {
-                match space {
-                    None => 0,
-                    Some(amphipod) => {
-                        let target_room_index = amphipod.target_room_index();
-                        let target_x = self.room_x(target_room_index);
-                        let hallway_steps = if current_x < target_x {
-                            target_x - current_x
-                        } else {
-                            current_x - target_x
-                        };
+            .filter_map(|(current_x, space)| {
+                // Filter out empty spaces
+                space.map(|amphipod| (current_x, amphipod))
+            })
+            .map(|(current_x, amphipod)| {
+                let target_room_index = amphipod.target_room_index();
+                let target_x = self.room_x(target_room_index);
+                let steps = abs_diff(current_x, target_x);
 
-                        let steps = hallway_steps + 1;
-                        steps * amphipod.energy()
-                    }
-                }
+                steps * amphipod.energy()
             })
             .sum::<usize>();
 
-        room_room + hallway_room
+        // Energy cost of amphipods entering their target room from the space above it
+        let enter_room = self.rooms.iter()
+            .enumerate()
+            .flat_map(|(room_index, room)| {
+                room.iter().enumerate().rev()
+                    .skip_while(move |(_, space)| {
+                        if let Some(amphipod) = space {
+                            // Skip amphipods that don't need to move
+                            amphipod.target_room_index() == room_index
+                        } else {
+                            false
+                        }
+                    })
+                    .map(move |(room_depth, _)| {
+                        let target_amphipod = Amphipod::from_room_index(room_index);
+                        let steps = room_depth + 1;
+
+                        steps * target_amphipod.energy()
+                    })
+            })
+            .sum::<usize>();
+
+        exit_room + move_hallway + enter_room
     }
 }
 
