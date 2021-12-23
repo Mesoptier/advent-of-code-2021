@@ -36,7 +36,7 @@ fn abs_diff(a: usize, b: usize) -> usize {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 struct State<const R: usize> {
     // NOTE: This array could be shrunk to hold only 7 elements to save some memory, but it's easier
     // to work with if it has 11 entries (4 of which will always be None).
@@ -45,6 +45,49 @@ struct State<const R: usize> {
 }
 
 impl<const R: usize> State<R> {
+    /// Encodes the state as an unsigned int.
+    ///
+    /// There's 5 states for each of the 27 spaces, that gives us 5^27 total combinations. It just
+    /// happens that all those combinations neatly fit into a single usize, since 5^27 < 2^64.
+    ///
+    /// Remark: If it didn't fit, I could still have tried removing the four spaces above the rooms,
+    /// since those are always None.
+    fn encode(&self) -> usize {
+        fn encode_space(space: Option<Amphipod>) -> usize {
+            match space {
+                None => 0,
+                Some(amphipod) => amphipod.target_room_index() + 1
+            }
+        }
+
+        self.rooms.iter().flatten().rev()
+            .chain(self.hallway.iter().rev())
+            .map(|space| encode_space(*space))
+            .fold(0, |encoded, encoded_space| encoded * 5 + encoded_space)
+    }
+
+    /// Decodes a state previously encoded using state.encode().
+    fn decode(mut encoded: usize) -> Self {
+        fn decode_space(encoded_space: usize) -> Option<Amphipod> {
+            match encoded_space {
+                0 => None,
+                1 | 2 | 3 | 4 => Some(Amphipod::from_room_index(encoded_space - 1)),
+                _ => unreachable!(),
+            }
+        }
+
+        let mut it = std::iter::from_fn(move || {
+            let encoded_space = encoded % 5;
+            encoded = encoded / 5;
+            Some(decode_space(encoded_space))
+        });
+
+        Self {
+            hallway: [(); 11].map(|_| it.next().unwrap()),
+            rooms: [(); 4].map(|_| [(); R].map(|_| it.next().unwrap()))
+        }
+    }
+
     /// Checks whether the current state is the goal state (i.e., all amphipods are in their target
     /// room).
     fn is_goal(&self) -> bool {
@@ -338,18 +381,18 @@ pub fn solve_part2(input: &Vec<Amphipod>) -> usize {
 }
 
 #[derive(PartialEq, Eq)]
-struct Entry<const R: usize> {
-    state: State<R>,
+struct Entry {
+    encoded_state: usize,
     f_score: usize,
 }
 
-impl<const R: usize> PartialOrd<Self> for Entry<R> {
+impl PartialOrd<Self> for Entry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<const R: usize> Ord for Entry<R> {
+impl Ord for Entry {
     fn cmp(&self, other: &Self) -> Ordering {
         self.f_score.cmp(&other.f_score).reverse()
     }
@@ -360,24 +403,27 @@ fn solve_both_parts<const R: usize>(initial_state: State<R>) -> usize {
 
     let mut q = BinaryHeap::new();
     q.push(Entry {
-        state: initial_state,
+        encoded_state: initial_state.encode(),
         f_score: 0,
     });
 
-    let mut g_score: HashMap<State<R>, usize> = HashMap::new();
-    g_score.insert(initial_state, 0);
+    let mut g_score: HashMap<usize, usize> = HashMap::new();
+    g_score.insert(initial_state.encode(), 0);
 
-    while let Some(Entry { state, f_score }) = q.pop() {
+    while let Some(Entry { encoded_state, f_score }) = q.pop() {
+        let state = State::<R>::decode(encoded_state);
+
         if state.is_goal() {
             return f_score;
         }
 
         for (next_state, delta_energy) in state.transitions() {
-            let tentative_g_score = g_score[&state] + delta_energy;
-            if tentative_g_score < *g_score.get(&next_state).unwrap_or(&usize::MAX) {
-                g_score.insert(next_state, tentative_g_score);
+            let encoded_next_state = next_state.encode();
+            let tentative_g_score = g_score[&encoded_state] + delta_energy;
+            if tentative_g_score < *g_score.get(&encoded_next_state).unwrap_or(&usize::MAX) {
+                g_score.insert(encoded_next_state, tentative_g_score);
                 q.push(Entry {
-                    state: next_state,
+                    encoded_state: encoded_next_state,
                     f_score: tentative_g_score + next_state.h_score(),
                 });
             }
