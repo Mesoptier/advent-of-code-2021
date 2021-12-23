@@ -190,6 +190,25 @@ impl<const R: usize> State<R> {
     /// Heuristic function for the A* algorithm. Returns a lower bound on the energy cost needed to
     /// reach the goal state from this state.
     fn h_score(&self) -> usize {
+        // TODO: Return usize::MAX for states that could never reach target_state (i.e., deadlocks)?
+        //
+        // Easiest deadlock is if two amphipods are in the hallway and block each other from their
+        // target rooms. In this deadlock, A cannot react its room because D blocks it, and vice versa:
+        // #############
+        // #.....D.A...#
+        // ###B#C#B#.###
+        //   #A#D#C#.#
+        //   #########
+        //
+        // Another, more complex deadlock. Here A cannot enter its room, because B cannot leave, because A & D block the hallway.
+        // #############
+        // #.D.A.......#
+        // ###B#.#B#.###
+        //   #A#C#C#D#
+        //   #########
+        //
+        // Are there more deadlocks?
+
         // Energy cost of amphipods exiting rooms and moving to the space above their target room
         let exit_room = self.rooms.iter()
             .enumerate()
