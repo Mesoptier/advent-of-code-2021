@@ -48,15 +48,15 @@ impl<const R: usize> State<R> {
     /// Encodes the state as an unsigned int.
     ///
     /// There's 5 states for each of the 27 spaces, that gives us 5^27 total combinations. It just
-    /// happens that all those combinations neatly fit into a single usize, since 5^27 < 2^64.
+    /// happens that all those combinations neatly fit into a single u64, since 5^27 < 2^64.
     ///
     /// Remark: If it didn't fit, I could still have tried removing the four spaces above the rooms,
     /// since those are always None.
-    fn encode(&self) -> usize {
-        fn encode_space(space: Option<Amphipod>) -> usize {
+    fn encode(&self) -> u64 {
+        fn encode_space(space: Option<Amphipod>) -> u64 {
             match space {
                 None => 0,
-                Some(amphipod) => amphipod.target_room_index() + 1
+                Some(amphipod) => amphipod.target_room_index() as u64 + 1
             }
         }
 
@@ -67,11 +67,11 @@ impl<const R: usize> State<R> {
     }
 
     /// Decodes a state previously encoded using state.encode().
-    fn decode(mut encoded: usize) -> Self {
-        fn decode_space(encoded_space: usize) -> Option<Amphipod> {
+    fn decode(mut encoded: u64) -> Self {
+        fn decode_space(encoded_space: u64) -> Option<Amphipod> {
             match encoded_space {
                 0 => None,
-                1 | 2 | 3 | 4 => Some(Amphipod::from_room_index(encoded_space - 1)),
+                1 | 2 | 3 | 4 => Some(Amphipod::from_room_index((encoded_space - 1) as usize)),
                 _ => unreachable!(),
             }
         }
@@ -384,7 +384,7 @@ pub fn solve_part2(input: &Vec<Amphipod>) -> usize {
 
 #[derive(PartialEq, Eq)]
 struct Entry {
-    encoded_state: usize,
+    encoded_state: u64,
     f_score: usize,
 }
 
@@ -409,7 +409,7 @@ fn solve_both_parts<const R: usize>(initial_state: State<R>) -> usize {
         f_score: 0,
     });
 
-    let mut g_score: HashMap<usize, usize> = HashMap::new();
+    let mut g_score: HashMap<u64, usize> = HashMap::new();
     g_score.insert(initial_state.encode(), 0);
 
     let encoded_goal_state = State::<R>::goal().encode();
@@ -419,11 +419,12 @@ fn solve_both_parts<const R: usize>(initial_state: State<R>) -> usize {
             return f_score;
         }
 
-        let state = State::<R>::decode(encoded_state);
+        let current_state = State::<R>::decode(encoded_state);
+        let current_g_score = g_score[&encoded_state];
 
-        for (next_state, delta_energy) in state.transitions() {
+        for (next_state, transition_cost) in current_state.transitions() {
             let encoded_next_state = next_state.encode();
-            let tentative_g_score = g_score[&encoded_state] + delta_energy;
+            let tentative_g_score = current_g_score + transition_cost;
             if tentative_g_score < *g_score.get(&encoded_next_state).unwrap_or(&usize::MAX) {
                 g_score.insert(encoded_next_state, tentative_g_score);
                 q.push(Entry {
