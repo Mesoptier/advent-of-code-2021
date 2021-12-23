@@ -44,7 +44,9 @@ struct State<const R: usize> {
 }
 
 impl<const R: usize> State<R> {
-    fn is_complete(&self) -> bool {
+    /// Checks whether the current state is the goal state (i.e., all amphipods are in their target
+    /// room).
+    fn is_goal(&self) -> bool {
         self.rooms.iter().enumerate().all(|(room_index, room)| {
             room.iter().all(|space| match space {
                 None => false,
@@ -53,7 +55,7 @@ impl<const R: usize> State<R> {
         })
     }
 
-    /// Whether the room with the given index can be entered (by a matching amphipod).
+    /// Checks whether the room with the given index can be entered (by a matching amphipod).
     fn is_room_enterable(&self, room_index: usize) -> bool {
         self.rooms[room_index].iter().all(|space| {
             match space {
@@ -63,6 +65,7 @@ impl<const R: usize> State<R> {
         })
     }
 
+    /// Checks whether some amphipods still have to exit the room with the given index.
     fn is_room_exitable(&self, room_index: usize) -> bool {
         !self.is_room_enterable(room_index)
     }
@@ -72,6 +75,7 @@ impl<const R: usize> State<R> {
         2 + (room_index) * 2
     }
 
+    /// Checks whether a given hallway position is directly above one of the rooms.
     fn is_above_room(&self, x: usize) -> bool {
         (x - 2) % 2 == 0
             && (x - 2) / 2 < self.rooms.len()
@@ -90,6 +94,15 @@ impl<const R: usize> State<R> {
         slice.iter().all(|space| space.is_none())
     }
 
+    /// Returns an iterator over all empty spaces to the left and right of the given X position.
+    fn iter_empty_spaces(&self, start_x: usize) -> impl Iterator<Item=usize> + '_ {
+        let left_it = (0..start_x).rev()
+            .take_while(|x| self.hallway[*x].is_none());
+        let right_it = ((start_x + 1)..self.hallway.len())
+            .take_while(|x| self.hallway[*x].is_none());
+        left_it.chain(right_it)
+    }
+
     /// Get all valid transitions from this state, together with their energy costs.
     fn transitions(&self) -> Vec<(State<R>, usize)> {
         let mut transitions = self.room_to_hallway_transitions();
@@ -97,6 +110,7 @@ impl<const R: usize> State<R> {
         transitions
     }
 
+    /// Returns transitions where amphipods move out of a room into the hallway.
     fn room_to_hallway_transitions(&self) -> Vec<(State<R>, usize)> {
         self.rooms.iter()
             .enumerate()
@@ -114,13 +128,7 @@ impl<const R: usize> State<R> {
                 let current_x = self.room_x(room_index);
 
                 // Step in either direction as long as there is empty space
-                // TODO: Move this into a separate method
-                let left_it = (0..current_x).rev()
-                    .take_while(|x| self.hallway[*x].is_none());
-                let right_it = ((current_x + 1)..self.hallway.len())
-                    .take_while(|x| self.hallway[*x].is_none());
-                left_it
-                    .chain(right_it)
+                self.iter_empty_spaces(current_x)
                     // Cannot move to a space directly above a room
                     .filter(|target_x| !self.is_above_room(*target_x))
                     .map(move |target_x| {
@@ -138,6 +146,7 @@ impl<const R: usize> State<R> {
             .collect()
     }
 
+    /// Returns transitions where amphipods move from the hallway into their target room.
     fn hallway_to_room_transitions(&self) -> Vec<(State<R>, usize)> {
         self.hallway.iter()
             .enumerate()
@@ -178,6 +187,8 @@ impl<const R: usize> State<R> {
             .collect()
     }
 
+    /// Heuristic function for the A* algorithm. Returns a lower bound on the energy cost needed to
+    /// reach the goal state from this state.
     fn h_score(&self) -> usize {
         // Energy cost of amphipods exiting rooms and moving to the space above their target room
         let exit_room = self.rooms.iter()
@@ -354,7 +365,7 @@ fn solve_both_parts<const R: usize>(initial_state: State<R>) -> usize {
     g_score.insert(initial_state, 0);
 
     while let Some(Entry { state, f_score }) = q.pop() {
-        if state.is_complete() {
+        if state.is_goal() {
             return f_score;
         }
 
