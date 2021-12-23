@@ -38,7 +38,8 @@ fn abs_diff(a: usize, b: usize) -> usize {
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 struct State<const R: usize> {
-    // TODO: Shrink this array to 7 elements, since spaces above rooms are invalid
+    // NOTE: This array could be shrunk to hold only 7 elements to save some memory, but it's easier
+    // to work with if it has 11 entries (4 of which will always be None).
     hallway: [Option<Amphipod>; 11],
     rooms: [[Option<Amphipod>; R]; 4],
 }
@@ -190,25 +191,6 @@ impl<const R: usize> State<R> {
     /// Heuristic function for the A* algorithm. Returns a lower bound on the energy cost needed to
     /// reach the goal state from this state.
     fn h_score(&self) -> usize {
-        // TODO: Return usize::MAX for states that could never reach target_state (i.e., deadlocks)?
-        //
-        // Easiest deadlock is if two amphipods are in the hallway and block each other from their
-        // target rooms. In this deadlock, A cannot react its room because D blocks it, and vice versa:
-        // #############
-        // #.....D.A...#
-        // ###B#C#B#.###
-        //   #A#D#C#.#
-        //   #########
-        //
-        // Another, more complex deadlock. Here A cannot enter its room, because B cannot leave, because A & D block the hallway.
-        // #############
-        // #.D.A.......#
-        // ###B#.#B#.###
-        //   #A#C#C#D#
-        //   #########
-        //
-        // Are there more deadlocks?
-
         // Energy cost of amphipods exiting rooms and moving to the space above their target room
         let exit_room = self.rooms.iter()
             .enumerate()
@@ -325,24 +307,6 @@ pub fn input_generator(input: &str) -> Vec<Amphipod> {
     amphipods
 }
 
-#[derive(PartialEq, Eq)]
-struct Entry<const R: usize> {
-    state: State<R>,
-    f_score: usize,
-}
-
-impl<const R: usize> PartialOrd<Self> for Entry<R> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<const R: usize> Ord for Entry<R> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.f_score.cmp(&other.f_score).reverse()
-    }
-}
-
 #[aoc(day23, part1)]
 pub fn solve_part1(input: &Vec<Amphipod>) -> usize {
     let initial_state = State {
@@ -373,7 +337,27 @@ pub fn solve_part2(input: &Vec<Amphipod>) -> usize {
     solve_both_parts(initial_state)
 }
 
+#[derive(PartialEq, Eq)]
+struct Entry<const R: usize> {
+    state: State<R>,
+    f_score: usize,
+}
+
+impl<const R: usize> PartialOrd<Self> for Entry<R> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<const R: usize> Ord for Entry<R> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.f_score.cmp(&other.f_score).reverse()
+    }
+}
+
 fn solve_both_parts<const R: usize>(initial_state: State<R>) -> usize {
+    // Basically: A* search algorithm.
+
     let mut q = BinaryHeap::new();
     q.push(Entry {
         state: initial_state,
