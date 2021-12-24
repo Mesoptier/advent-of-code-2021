@@ -1,7 +1,5 @@
 use std::str::FromStr;
 use itertools::Itertools;
-use z3::{ast, Config, Context, Optimize};
-use z3::ast::Ast;
 
 #[aoc_generator(day24)]
 pub fn input_generator(input: &str) -> Vec<(i32, i32, i32)> {
@@ -27,99 +25,117 @@ pub fn input_generator(input: &str) -> Vec<(i32, i32, i32)> {
 }
 
 #[aoc(day24, part1)]
-pub fn solve_part1(input: &Vec<(i32, i32, i32)>) -> i64 {
+pub fn solve_part1(input: &Vec<(i32, i32, i32)>) -> usize {
     solve_both_parts(input, false)
 }
 
 #[aoc(day24, part2)]
-pub fn solve_part2(input: &Vec<(i32, i32, i32)>) -> i64 {
+pub fn solve_part2(input: &Vec<(i32, i32, i32)>) -> usize {
     solve_both_parts(input, true)
 }
 
-pub fn solve_both_parts(input: &Vec<(i32, i32, i32)>, minimize: bool) -> i64 {
-    // Working out:
-    // ------------------------------
-    // inp w
-    // mul x 0      -> x = 0        |
-    // add x z      -> x += z       |
-    // mod x 26     -> x %= 26      | -> x = z % 26
-    // add x B      -> x += B       |
-    // eql x w      -> x = (x == w) |
-    // eql x 0      -> x = (x == 0) | -> x = ((x + B) != w)     // x matches 0 | 1
-    // mul y 0      -> y = 0        |
-    // add y 25     -> y += 25      |
-    // mul y x      -> y *= x       |
-    // add y 1      -> y += 1       | -> y = (25 * x) + 1       // y matches 1 | 26
-    // div z A      -> z /= A       // A matches 1 | 26
-    // mul z y      -> z *= y
-    // mul y 0      -> y = 0        |
-    // add y w      -> y += w       |
-    // add y 8      -> y += C       |
-    // mul y x      -> y *= x       | -> y = (w + C) * x        // y matches 0 | (w + C)
-    // add z y      -> z += y
-    // ------------------------------
-    // x = ((z % 26 + B) != w)
-    // z = z / A
-    // if x == 1 {
-    //     z = z * 26 + w + C
-    // }
-    // z
+pub fn solve_both_parts(input: &Vec<(i32, i32, i32)>, minimize: bool) -> usize {
+    /*
+    Working out:
+    ------------------------------
+    inp w
+    mul x 0      -> x = 0        |
+    add x z      -> x += z       |
+    mod x 26     -> x %= 26      | -> x = z % 26
+    add x B      -> x += B       |
+    eql x w      -> x = (x == w) |
+    eql x 0      -> x = (x == 0) | -> x = ((x + B) != w)     // x matches 0 | 1
+    mul y 0      -> y = 0        |
+    add y 25     -> y += 25      |
+    mul y x      -> y *= x       |
+    add y 1      -> y += 1       | -> y = (25 * x) + 1       // y matches 1 | 26
+    div z A      -> z /= A       // A matches 1 | 26
+    mul z y      -> z *= y
+    mul y 0      -> y = 0        |
+    add y w      -> y += w       |
+    add y 8      -> y += C       |
+    mul y x      -> y *= x       | -> y = (w + C) * x        // y matches 0 | (w + C)
+    add z y      -> z += y
+    ------------------------------
 
-    let cfg = Config::new();
-    let ctx = Context::new(&cfg);
+    Simplifies to:
+    x = ((z % 26 + B) != w)
+    z = z / A
+    if x {
+        z = z * 26 + w + C
+    }
+    z
 
-    let z = (0..=14)
-        .map(|i| {
-            ast::Int::new_const(&ctx, format!("z{}", i))
-        })
-        .collect_vec();
+    Facts about the constants:
+    for all (a, b, c):
+        a ∈ {1, 26}
+        a == 1  <=>  b > 10
+        b > 10   =>  z % 26 + b != w
 
-    let w = (0..14)
-        .map(|i| {
-            ast::Int::new_const(&ctx, format!("w{}", i))
-        })
-        .collect_vec();
+    Which further simplifies the code:
+    if a == 1:
+        z = z * 26 + w + c
+        z
+    else:
+        x = (z % 26 + B) != w
+        z = z / 26
+        if x:
+            z = z * 26 + w + c
+        z
 
-    let solver = Optimize::new(&ctx);
+    There are 7 cases where a == 1, and 7 cases where a == 26. In the cases where a == 1, we "push"
+    a base 26 digit (w + c) to the end of z. So for z to equal 0 at the end, in the other cases
+    where a == 26 we must "pop" those digits again, and so (z % 26 + B) must equal w.
 
-    solver.assert(&z[0]._eq(&ast::Int::from_i64(&ctx, 0)));
-    solver.assert(&z[14]._eq(&ast::Int::from_i64(&ctx, 0)));
+    */
 
-    let mut model_number = ast::Int::from_i64(&ctx, 0);
+    /// Evaluate the state. Returns `None` if we should have "popped", but didn't. Otherwise returns
+    /// the `Some(z)` with the `z` for the next step.
+    fn eval_state(z: i32, w: i32, consts: (i32, i32, i32)) -> Option<i32> {
+        let (a, b, c) = consts;
 
-    for i in 0..14 {
-        // 1 <= w <= 9
-        solver.assert(&w[i].ge(&ast::Int::from_i64(&ctx, 1)));
-        solver.assert(&w[i].le(&ast::Int::from_i64(&ctx, 9)));
-
-        // Combine digits into the model_number
-        let p = 13 - i;
-        model_number += &w[i] * 10i64.pow(p as u32);
+        if a == 26 {
+            if z % 26 + b != w {
+                None
+            } else {
+                Some(z / 26)
+            }
+        } else {
+            Some(z * 26 + w + c)
+        }
     }
 
-    if minimize {
-        solver.minimize(&model_number);
-    } else {
-        solver.maximize(&model_number);
+    fn optimize(z: i32, i: usize, input: &Vec<(i32, i32, i32)>, minimize: bool) -> Option<usize> {
+        // Base case
+        if i == 14 {
+            return if z == 0 {
+                Some(0)
+            } else {
+                None
+            };
+        }
+
+        let consts = input[i];
+
+        // Search through 1..=9 range with smallest/largest first depending on whether we're
+        // minimizing or maximizing.
+        let mut ws = (1..=9).collect_vec();
+        if !minimize {
+            ws.reverse();
+        }
+
+        for w in ws {
+            // Check if state is valid and if so, what the next value of z is.
+            if let Some(z) = eval_state(z, w, consts) {
+                // Try to optimize the remaining digits, if possible.
+                if let Some(n) = optimize(z, i + 1, input, minimize) {
+                    return Some(n + w as usize * 10usize.pow(13 - i as u32));
+                }
+            }
+        }
+
+        None
     }
 
-    for (i, &(a, b, c)) in input.iter().enumerate() {
-        let z_in = &z[i];
-        let z_out = &z[i + 1];
-        let w = &w[i];
-
-        // x = ((z % 26 + B) != w)
-        let x = ((z_in % 26 as i64) + b as i64)._eq(w).not();
-
-        // x => z_out == (z_in / 26) * 26 + w + c
-        solver.assert(&x.implies(&z_out._eq(&((z_in / a as i64) * 26 as i64 + w + c as i64))));
-
-        // !x => z_out == (z_in / 26)
-        solver.assert(&x.not().implies(&z_out._eq(&(z_in / a as i64))));
-    }
-
-    solver.check(&[]);
-    let model = solver.get_model().unwrap();
-    let result = model.eval(&model_number, true).unwrap().as_i64().unwrap();
-    result
+    optimize(0, 0, input, minimize).unwrap()
 }
