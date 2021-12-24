@@ -105,7 +105,7 @@ pub fn solve_both_parts(input: &Vec<(i32, i32, i32)>, minimize: bool) -> usize {
         }
     }
 
-    fn optimize(z: i32, i: usize, input: &Vec<(i32, i32, i32)>, minimize: bool) -> Option<usize> {
+    fn optimize(z: i32, i: usize, input: &Vec<(i32, i32, i32)>, ws: &[i32]) -> Option<usize> {
         // Base case
         if i == 14 {
             return if z == 0 {
@@ -117,18 +117,11 @@ pub fn solve_both_parts(input: &Vec<(i32, i32, i32)>, minimize: bool) -> usize {
 
         let consts = input[i];
 
-        // Search through 1..=9 range with smallest/largest first depending on whether we're
-        // minimizing or maximizing.
-        let mut ws = (1..=9).collect_vec();
-        if !minimize {
-            ws.reverse();
-        }
-
-        for w in ws {
+        for &w in ws {
             // Check if state is valid and if so, what the next value of z is.
             if let Some(z) = eval_state(z, w, consts) {
                 // Try to optimize the remaining digits, if possible.
-                if let Some(n) = optimize(z, i + 1, input, minimize) {
+                if let Some(n) = optimize(z, i + 1, input, ws) {
                     return Some(n + w as usize * 10usize.pow(13 - i as u32));
                 }
             }
@@ -137,5 +130,12 @@ pub fn solve_both_parts(input: &Vec<(i32, i32, i32)>, minimize: bool) -> usize {
         None
     }
 
-    optimize(0, 0, input, minimize).unwrap()
+
+    // Search through 1..=9 range with smallest/largest first depending on whether we're
+    // minimizing or maximizing.
+    let mut ws = (1..=9).collect_vec();
+    if !minimize {
+        ws.reverse();
+    }
+    optimize(0, 0, input, ws.as_slice()).unwrap()
 }
