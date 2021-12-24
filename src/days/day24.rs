@@ -1,4 +1,6 @@
 use std::str::FromStr;
+
+use hashbrown::HashMap;
 use itertools::Itertools;
 
 #[aoc_generator(day24)]
@@ -105,7 +107,13 @@ pub fn solve_both_parts(input: &Vec<(i32, i32, i32)>, minimize: bool) -> usize {
         }
     }
 
-    fn optimize(z: i32, i: usize, input: &Vec<(i32, i32, i32)>, ws: &[i32]) -> Option<usize> {
+    fn optimize(
+        z: i32,
+        i: usize,
+        input: &Vec<(i32, i32, i32)>,
+        ws: &[i32],
+        cache: &mut HashMap<(i32, usize), Option<usize>>,
+    ) -> Option<usize> {
         // Base case
         if i == 14 {
             return if z == 0 {
@@ -115,21 +123,29 @@ pub fn solve_both_parts(input: &Vec<(i32, i32, i32)>, minimize: bool) -> usize {
             };
         }
 
+        // Return from cache, if possible.
+        if let Some(result) = cache.get(&(z, i)) {
+            return *result;
+        }
+
         let consts = input[i];
 
+        // Optimize current digit, if possible.
+        let mut result = None;
         for &w in ws {
             // Check if state is valid and if so, what the next value of z is.
             if let Some(z) = eval_state(z, w, consts) {
                 // Try to optimize the remaining digits, if possible.
-                if let Some(n) = optimize(z, i + 1, input, ws) {
-                    return Some(n + w as usize * 10usize.pow(13 - i as u32));
+                if let Some(n) = optimize(z, i + 1, input, ws, cache) {
+                    result = Some(n + w as usize * 10usize.pow(13 - i as u32));
+                    break;
                 }
             }
         }
 
-        None
+        cache.insert((z, i), result);
+        result
     }
-
 
     // Search through 1..=9 range with smallest/largest first depending on whether we're
     // minimizing or maximizing.
@@ -137,5 +153,5 @@ pub fn solve_both_parts(input: &Vec<(i32, i32, i32)>, minimize: bool) -> usize {
     if !minimize {
         ws.reverse();
     }
-    optimize(0, 0, input, ws.as_slice()).unwrap()
+    optimize(0, 0, input, ws.as_slice(), &mut HashMap::new()).unwrap()
 }
