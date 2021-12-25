@@ -57,6 +57,6 @@ fn solve_part1(input: &Vec<Vec<char>>) -> usize {
             return step;
         }
 
-        std::mem::swap(&mut grid, &mut next_grid);
+        grid = next_grid;
     }
 }
